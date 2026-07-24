@@ -117,22 +117,59 @@ async function saveContactManual(e) {
   }
 }
 
+async function enrichContact(id) {
+  try {
+    const res = await fetch(`${API}/contacts/${id}/enrich`, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    const contact = await res.json();
+    alert(`Arricchito: score ${contact.score}\nTag: ${(contact.tags || []).join(', ')}`);
+    await loadContacts();
+  } catch (err) {
+    alert('Errore enrichment: ' + err.message);
+  }
+}
+
+async function showReport(id) {
+  try {
+    const res = await fetch(`${API}/contacts/${id}/report`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    document.getElementById('report-text').textContent = data.report || 'Nessun report';
+    document.getElementById('report-section').style.display = 'block';
+  } catch (err) {
+    alert('Errore report: ' + err.message);
+  }
+}
+
 async function loadContacts() {
   try {
     const res = await fetch(`${API}/contacts`);
     const contacts = await res.json();
     contactsList.innerHTML = contacts.map(c => `
       <li>
-        <strong>${c.name || 'Sconosciuto'}</strong>
-        ${c.company ? `<span>${c.company}</span>` : ''}
-        ${c.email ? `<br><small>${c.email}</small>` : ''}
-        ${c.phone ? `<small> · ${c.phone}</small>` : ''}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;">
+          <div>
+            <strong>${c.name || 'Sconosciuto'}</strong>
+            ${c.company ? `<span>${c.company}</span>` : ''}
+            ${c.email ? `<br><small>${c.email}</small>` : ''}
+            ${c.phone ? `<small> · ${c.phone}</small>` : ''}
+            ${c.score ? `<br><small>Score: ${c.score}</small>` : ''}
+            ${c.tags ? `<br><small>${c.tags.join(', ')}</small>` : ''}
+          </div>
+          <div class="actions">
+            <button onclick="enrichContact(${c.id})">Arricchisci</button>
+            <button onclick="showReport(${c.id})">Report</button>
+          </div>
+        </div>
       </li>
     `).join('');
   } catch (err) {
     contactsList.innerHTML = `<li>Errore caricamento: ${err.message}</li>`;
   }
 }
+
+window.enrichContact = enrichContact;
+window.showReport = showReport;
 
 btnSnap.addEventListener('click', snap);
 btnRetake.addEventListener('click', retake);
@@ -143,6 +180,10 @@ fileInput.addEventListener('change', e => {
 });
 contactForm.addEventListener('submit', saveContactManual);
 btnRefresh.addEventListener('click', loadContacts);
+
+document.getElementById('btn-close-report').addEventListener('click', () => {
+  document.getElementById('report-section').style.display = 'none';
+});
 
 startCamera();
 loadContacts();

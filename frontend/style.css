@@ -73,3 +73,14 @@ form input {
 #contacts-list li:last-child { border-bottom: none; }
 #contacts-list strong { display: block; color: #1a237e; }
 #status-text { text-align: center; color: #555; }
+#report-section pre {
+  background: #f4f4f4;
+  padding: 1rem;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.actions { display: flex; flex-direction: column; gap: 0.3rem; }
+.actions button { padding: 0.4rem; font-size: 0.8rem; }
