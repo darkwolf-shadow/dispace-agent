@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>DiSpace Lead Capture</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>DiSpace Lead Capture</h1>
+    <p>Scatta o carica un biglietto da visita</p>
+  </header>
+
+  <main>
+    <section id="capture-section">
+      <video id="camera" autoplay playsinline></video>
+      <canvas id="preview" style="display:none;"></canvas>
+      <div class="controls">
+        <button id="btn-snap" disabled>Scatta</button>
+        <button id="btn-retake" style="display:none;">Riprova</button>
+        <button id="btn-upload" style="display:none;">Analizza</button>
+        <label class="file-label">
+          Carica file
+          <input type="file" id="file-input" accept="image/*">
+        </label>
+      </div>
+    </section>
+
+    <section id="status-section" style="display:none;">
+      <p id="status-text">Elaborazione in corso...</p>
+    </section>
+
+    <section id="result-section" style="display:none;">
+      <h2>Contatto estratto</h2>
+      <form id="contact-form">
+        <label>Nome <input type="text" id="c-name" name="name"></label>
+        <label>Azienda <input type="text" id="c-company" name="company"></label>
+        <label>Ruolo <input type="text" id="c-role" name="role"></label>
+        <label>Email <input type="email" id="c-email" name="email"></label>
+        <label>Telefono <input type="tel" id="c-phone" name="phone"></label>
+        <label>Sito <input type="url" id="c-website" name="website"></label>
+        <label>Indirizzo <input type="text" id="c-address" name="address"></label>
+        <label>LinkedIn <input type="url" id="c-linkedin" name="linkedin"></label>
+        <div class="controls">
+          <button type="submit">Salva contatto</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="contacts-section">
+      <h2>Contatti recenti</h2>
+      <ul id="contacts-list"></ul>
+      <button id="btn-refresh">Aggiorna lista</button>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

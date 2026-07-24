@@ -1,0 +1,75 @@
+* { box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #f6f7f9;
+  color: #222;
+}
+header {
+  background: #1a237e;
+  color: white;
+  padding: 1rem;
+  text-align: center;
+}
+header h1 { margin: 0; font-size: 1.25rem; }
+header p { margin: 0.25rem 0 0; opacity: 0.9; font-size: 0.9rem; }
+main { padding: 1rem; max-width: 640px; margin: 0 auto; }
+section {
+  background: white;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+#camera, #preview {
+  width: 100%;
+  border-radius: 8px;
+  background: #000;
+}
+.controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+button, .file-label {
+  flex: 1 1 auto;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 8px;
+  background: #3949ab;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+button:disabled { background: #9fa8da; cursor: not-allowed; }
+.file-label { background: #00897b; display: inline-block; }
+#file-input { display: none; }
+form label {
+  display: block;
+  margin-bottom: 0.6rem;
+  font-size: 0.9rem;
+  color: #555;
+}
+form input {
+  width: 100%;
+  padding: 0.5rem;
+  margin-top: 0.25rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+#contacts-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+}
+#contacts-list li {
+  padding: 0.75rem;
+  border-bottom: 1px solid #eee;
+}
+#contacts-list li:last-child { border-bottom: none; }
+#contacts-list strong { display: block; color: #1a237e; }
+#status-text { text-align: center; color: #555; }
