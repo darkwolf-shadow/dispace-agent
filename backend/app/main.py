@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     openai_base_url: Optional[str] = None
     openrouter_api_key: Optional[str] = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_http_referer: str = "https://localhost"
+    openrouter_title: str = "DiSpace Lead Capture"
     tavily_api_key: Optional[str] = None
     clearbit_api_key: Optional[str] = None
     uploads_dir: str = "/app/uploads"
@@ -53,7 +55,14 @@ os.makedirs(settings.uploads_dir, exist_ok=True)
 
 openai_client = None
 if settings.openrouter_api_key:
-    openai_client = OpenAI(base_url=settings.openrouter_base_url, api_key=settings.openrouter_api_key)
+    openai_client = OpenAI(
+        base_url=settings.openrouter_base_url,
+        api_key=settings.openrouter_api_key,
+        default_headers={
+            "HTTP-Referer": settings.openrouter_http_referer,
+            "X-Title": settings.openrouter_title,
+        },
+    )
 elif settings.openai_api_key:
     kwargs = {"api_key": settings.openai_api_key}
     if settings.openai_base_url:
