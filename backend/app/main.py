@@ -37,6 +37,9 @@ class JSONString(TypeDecorator):
 class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@db:5432/dispace"
     openai_api_key: Optional[str] = None
+    openai_base_url: Optional[str] = None
+    openrouter_api_key: Optional[str] = None
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
     tavily_api_key: Optional[str] = None
     clearbit_api_key: Optional[str] = None
     uploads_dir: str = "/app/uploads"
@@ -49,8 +52,13 @@ settings = Settings()
 os.makedirs(settings.uploads_dir, exist_ok=True)
 
 openai_client = None
-if settings.openai_api_key:
-    openai_client = OpenAI(api_key=settings.openai_api_key)
+if settings.openrouter_api_key:
+    openai_client = OpenAI(base_url=settings.openrouter_base_url, api_key=settings.openrouter_api_key)
+elif settings.openai_api_key:
+    kwargs = {"api_key": settings.openai_api_key}
+    if settings.openai_base_url:
+        kwargs["base_url"] = settings.openai_base_url
+    openai_client = OpenAI(**kwargs)
 
 engine = create_engine(settings.database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

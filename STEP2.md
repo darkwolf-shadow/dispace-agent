@@ -18,10 +18,13 @@ Questo branch aggiunge l’arricchimento automatico dei contatti e la generazion
 Aggiungi al `.env`:
 ```
 OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=          # opzionale, per endpoint compatibili OpenAI
+OPENROUTER_API_KEY=sk-or-...
 TAVILY_API_KEY=tvly-...
 CLEARBIT_API_KEY=...
 ```
-Se le chiavi non sono configurate, l’enrichment usa DuckDuckGo e genera report statici.
+`OPENROUTER_API_KEY` ha la precedenza su `OPENAI_API_KEY` e usa `https://openrouter.ai/api/v1`.
+Se nessuna chiave è configurata, l’enrichment usa DuckDuckGo e genera report statici.
 
 ## Note
 - Il modello `JSONString` custom serializza `tags`, `source_links` e `social_links` come JSON nel database.
