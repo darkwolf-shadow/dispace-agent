@@ -56,6 +56,34 @@
       </div>
     </section>
 
+    <section id="marketing-section">
+      <h2>Marketing Automation</h2>
+      <div class="grid">
+        <div>
+          <h3>Nuova campagna</h3>
+          <form id="campaign-form">
+            <label>Nome <input type="text" id="cmp-name" required></label>
+            <label>Canale
+              <select id="cmp-channel">
+                <option value="email">Email</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="linkedin">LinkedIn</option>
+                <option value="instagram">Instagram (story)</option>
+              </select>
+            </label>
+            <label>Template ID <input type="number" id="cmp-template-id" placeholder="vuoto = default"></label>
+            <div class="controls"><button type="submit">Crea campagna</button></div>
+          </form>
+          <ul id="campaigns-list"></ul>
+        </div>
+        <div>
+          <h3>Contenuti generati</h3>
+          <ul id="contents-list"></ul>
+          <button id="btn-refresh-contents">Aggiorna</button>
+        </div>
+      </div>
+    </section>
+
     <section id="contacts-section">
       <h2>Contatti recenti</h2>
       <ul id="contacts-list"></ul>

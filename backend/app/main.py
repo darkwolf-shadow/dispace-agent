@@ -98,7 +98,102 @@ class Contact(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class Template(Base):
+    __tablename__ = "templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    kind = Column(String, nullable=False)  # proposal, email, whatsapp, social, story
+    channel = Column(String, nullable=True)  # email, whatsapp, instagram, linkedin
+    subject = Column(String, nullable=True)
+    body = Column(Text, nullable=False)
+    is_default = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Campaign(Base):
+    __tablename__ = "campaigns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    channel = Column(String, nullable=False)
+    template_id = Column(Integer, nullable=True)
+    filters = Column(JSONString, nullable=True)
+    status = Column(String, default="draft")  # draft, ready, sent
+    generated_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class GeneratedContent(Base):
+    __tablename__ = "generated_contents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contact_id = Column(Integer, nullable=False, index=True)
+    campaign_id = Column(Integer, nullable=True, index=True)
+    kind = Column(String, nullable=False)
+    channel = Column(String, nullable=True)
+    subject = Column(String, nullable=True)
+    body = Column(Text, nullable=False)
+    status = Column(String, default="draft")  # draft, sent
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 Base.metadata.create_all(bind=engine)
+
+
+def seed_default_templates():
+    db = SessionLocal()
+    try:
+        if db.query(Template).first():
+            return
+        defaults = [
+            Template(
+                name="Proposta commerciale default",
+                kind="proposal",
+                channel="email",
+                subject="Proposta per {company}",
+                body=(
+                    "Gentile {name},\n\n"
+                    "abbiamo seguito con interesse l’attività di {company} e vorremmo proporre una collaborazione "
+                    "che possa supportare il vostro ruolo di {role}.\n\n"
+                    "Restiamo a disposizione per un breve call al numero {phone} o via email {email}.\n\n"
+                    "Cordiali saluti."
+                ),
+                is_default=1,
+            ),
+            Template(
+                name="Messaggio WhatsApp default",
+                kind="whatsapp",
+                channel="whatsapp",
+                body="Ciao {name}, sono {role} presso {company}? Vorremmo proporti una collaborazione. Scrivimi pure.",
+                is_default=1,
+            ),
+            Template(
+                name="Post LinkedIn default",
+                kind="social",
+                channel="linkedin",
+                body="Siamo felici di collaborare con aziende come {company}. Contattaci per scoprire come possiamo aiutare {role} come {name}.",
+                is_default=1,
+            ),
+            Template(
+                name="Story Instagram default",
+                kind="story",
+                channel="instagram",
+                body="Scorpi come aiutiamo {company} a crescere! DM per info. #{company}",
+                is_default=1,
+            ),
+        ]
+        for tmpl in defaults:
+            db.add(tmpl)
+        db.commit()
+    finally:
+        db.close()
+
+
+seed_default_templates()
 
 
 class ContactCreate(BaseModel):
@@ -145,7 +240,63 @@ class ReportOut(BaseModel):
     report: Optional[str] = None
 
 
-app = FastAPI(title="DiSpace Lead Capture API", version="0.2.0")
+class TemplateCreate(BaseModel):
+    name: str
+    kind: str
+    channel: Optional[str] = None
+    subject: Optional[str] = None
+    body: str
+    is_default: bool = False
+
+
+class TemplateUpdate(TemplateCreate):
+    pass
+
+
+class TemplateOut(TemplateCreate):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CampaignCreate(BaseModel):
+    name: str
+    channel: str
+    template_id: Optional[int] = None
+    filters: Optional[Dict[str, Any]] = None
+
+
+class CampaignOut(CampaignCreate):
+    id: int
+    status: str
+    generated_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class GeneratedContentOut(BaseModel):
+    id: int
+    contact_id: int
+    campaign_id: Optional[int] = None
+    kind: str
+    channel: Optional[str] = None
+    subject: Optional[str] = None
+    body: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+app = FastAPI(title="DiSpace Lead Capture API", version="0.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -457,6 +608,241 @@ def list_segments(db: Session = Depends(get_db)):
             for tag in c.tags:
                 segments["tag_counts"][tag] = segments["tag_counts"].get(tag, 0) + 1
     return segments
+
+
+# -------------------- Marketing Automation --------------------
+
+
+def apply_template(text: str, contact: Contact) -> str:
+    ctx = {
+        "name": contact.name or "",
+        "company": contact.company or "",
+        "role": contact.role or "",
+        "email": contact.email or "",
+        "phone": contact.phone or "",
+        "website": contact.website or "",
+        "address": contact.address or "",
+        "linkedin": contact.linkedin or "",
+    }
+    for key, value in ctx.items():
+        text = text.replace(f"{{{key}}}", value)
+    return text
+
+
+def generate_with_llm(prompt: str, max_tokens: int = 800) -> str:
+    if not openai_client:
+        return ""
+    try:
+        resp = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Sei un esperto di marketing B2B. Scrivi in italiano."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
+            max_tokens=max_tokens,
+        )
+        return resp.choices[0].message.content
+    except Exception as exc:
+        print("LLM generation error:", exc)
+        return ""
+
+
+def generate_content(contact: Contact, template: Template, kind: str, channel: Optional[str] = None) -> Dict[str, Any]:
+    channel = channel or template.channel or "generic"
+    base_body = apply_template(template.body, contact)
+    subject = apply_template(template.subject or "", contact) if template.subject else None
+
+    if openai_client:
+        prompt = (
+            f"Tipo: {kind}\nCanale: {channel}\n"
+            f"Destinatario: {contact.name} ({contact.role}) presso {contact.company}\n"
+            f"Istruzioni: usa il testo seguente come base, miglioralo e personalizzalo per il destinatario. "
+            f"Mantieni tono professionale e conciso.\n\nTesto base:\n{base_body}\n"
+        )
+        generated = generate_with_llm(prompt)
+        if generated:
+            body = generated
+        else:
+            body = base_body
+    else:
+        body = base_body
+
+    return {"kind": kind, "channel": channel, "subject": subject, "body": body}
+
+
+def match_filters(contact: Contact, filters: Optional[Dict[str, Any]]) -> bool:
+    if not filters:
+        return True
+    for key, value in filters.items():
+        attr = getattr(contact, key, None)
+        if isinstance(value, list):
+            if attr not in value:
+                return False
+        elif isinstance(value, dict):
+            # support simple range filters { "min_score": 50 }
+            if "min_score" in value and (contact.score or 0) < value["min_score"]:
+                return False
+        else:
+            if attr != value:
+                return False
+    return True
+
+
+@app.get("/templates", response_model=List[TemplateOut])
+def list_templates(db: Session = Depends(get_db)):
+    return db.query(Template).order_by(Template.created_at.desc()).all()
+
+
+@app.post("/templates", response_model=TemplateOut)
+def create_template(payload: TemplateCreate, db: Session = Depends(get_db)):
+    tmpl = Template(**payload.model_dump())
+    db.add(tmpl)
+    db.commit()
+    db.refresh(tmpl)
+    return tmpl
+
+
+@app.get("/templates/{template_id}", response_model=TemplateOut)
+def get_template(template_id: int, db: Session = Depends(get_db)):
+    tmpl = db.query(Template).filter(Template.id == template_id).first()
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return tmpl
+
+
+@app.put("/templates/{template_id}", response_model=TemplateOut)
+def update_template(template_id: int, payload: TemplateUpdate, db: Session = Depends(get_db)):
+    tmpl = db.query(Template).filter(Template.id == template_id).first()
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(tmpl, key, value)
+    db.commit()
+    db.refresh(tmpl)
+    return tmpl
+
+
+@app.delete("/templates/{template_id}")
+def delete_template(template_id: int, db: Session = Depends(get_db)):
+    tmpl = db.query(Template).filter(Template.id == template_id).first()
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+    db.delete(tmpl)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/contacts/{contact_id}/generate/{kind}", response_model=GeneratedContentOut)
+def generate_for_contact(
+    contact_id: int,
+    kind: str,
+    channel: Optional[str] = None,
+    template_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+
+    if template_id:
+        template = db.query(Template).filter(Template.id == template_id).first()
+    else:
+        template = db.query(Template).filter(Template.kind == kind, Template.is_default == 1).first()
+        if not template:
+            template = db.query(Template).filter(Template.kind == kind).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    result = generate_content(contact, template, kind, channel)
+    content = GeneratedContent(
+        contact_id=contact.id,
+        kind=result["kind"],
+        channel=result["channel"],
+        subject=result.get("subject"),
+        body=result["body"],
+    )
+    db.add(content)
+    db.commit()
+    db.refresh(content)
+    return content
+
+
+@app.get("/mailing-list")
+def get_mailing_list(
+    tag: Optional[str] = None,
+    min_score: Optional[int] = None,
+    company: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(Contact)
+    if tag:
+        # naive JSON-like filter; works for small lists
+        contacts = [c for c in query.all() if c.tags and tag in c.tags]
+    else:
+        contacts = query.all()
+    if min_score is not None:
+        contacts = [c for c in contacts if (c.score or 0) >= min_score]
+    if company:
+        contacts = [c for c in contacts if c.company and company.lower() in c.company.lower()]
+    return [ContactOut.model_validate(c).model_dump() for c in contacts]
+
+
+@app.post("/campaigns", response_model=CampaignOut)
+def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)):
+    campaign = Campaign(**payload.model_dump())
+    db.add(campaign)
+    db.commit()
+    db.refresh(campaign)
+    return campaign
+
+
+@app.get("/campaigns", response_model=List[CampaignOut])
+def list_campaigns(db: Session = Depends(get_db)):
+    return db.query(Campaign).order_by(Campaign.created_at.desc()).all()
+
+
+@app.post("/campaigns/{campaign_id}/run", response_model=List[GeneratedContentOut])
+def run_campaign(campaign_id: int, db: Session = Depends(get_db)):
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    template = None
+    if campaign.template_id:
+        template = db.query(Template).filter(Template.id == campaign.template_id).first()
+    if not template:
+        template = db.query(Template).filter(Template.kind == campaign.channel).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    contacts = db.query(Contact).all()
+    generated = []
+    for contact in contacts:
+        if not match_filters(contact, campaign.filters):
+            continue
+        result = generate_content(contact, template, campaign.channel, campaign.channel)
+        content = GeneratedContent(
+            contact_id=contact.id,
+            campaign_id=campaign.id,
+            kind=result["kind"],
+            channel=result["channel"],
+            subject=result.get("subject"),
+            body=result["body"],
+        )
+        db.add(content)
+        generated.append(content)
+    campaign.status = "ready"
+    campaign.generated_count = len(generated)
+    db.commit()
+    for g in generated:
+        db.refresh(g)
+    return generated
+
+
+@app.get("/generated-contents", response_model=List[GeneratedContentOut])
+def list_generated_contents(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    return db.query(GeneratedContent).order_by(GeneratedContent.created_at.desc()).offset(skip).limit(limit).all()
 
 
 @app.get("/health")

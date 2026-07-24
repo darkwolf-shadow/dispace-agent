@@ -84,3 +84,20 @@ form input {
 }
 .actions { display: flex; flex-direction: column; gap: 0.3rem; }
 .actions button { padding: 0.4rem; font-size: 0.8rem; }
+.grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 640px) {
+  .grid { grid-template-columns: 1fr 1fr; }
+}
+#campaigns-list, #contents-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  max-height: 250px;
+  overflow-y: auto;
+}
+#campaigns-list li, #contents-list li {
+  padding: 0.5rem;
+  border-bottom: 1px solid #eee;
+  font-size: 0.9rem;
+}
+#campaigns-list li:last-child, #contents-list li:last-child { border-bottom: none; }

@@ -11,6 +11,10 @@ const resultSection = document.getElementById('result-section');
 const contactForm = document.getElementById('contact-form');
 const contactsList = document.getElementById('contacts-list');
 const btnRefresh = document.getElementById('btn-refresh');
+const campaignForm = document.getElementById('campaign-form');
+const campaignsList = document.getElementById('campaigns-list');
+const contentsList = document.getElementById('contents-list');
+const btnRefreshContents = document.getElementById('btn-refresh-contents');
 
 let currentBlob = null;
 
@@ -159,6 +163,9 @@ async function loadContacts() {
           <div class="actions">
             <button onclick="enrichContact(${c.id})">Arricchisci</button>
             <button onclick="showReport(${c.id})">Report</button>
+            <button onclick="generateForContact(${c.id}, 'proposal')">Proposta</button>
+            <button onclick="generateForContact(${c.id}, 'whatsapp')">WhatsApp</button>
+            <button onclick="generateForContact(${c.id}, 'story')">Story</button>
           </div>
         </div>
       </li>
@@ -170,6 +177,85 @@ async function loadContacts() {
 
 window.enrichContact = enrichContact;
 window.showReport = showReport;
+window.generateForContact = generateForContact;
+
+async function generateForContact(id, kind) {
+  try {
+    const res = await fetch(`${API}/contacts/${id}/generate/${kind}`, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    const content = await res.json();
+    document.getElementById('report-text').textContent = `[${content.kind.toUpperCase()}]\n\nOggetto: ${content.subject || 'N/D'}\n\n${content.body}`;
+    document.getElementById('report-section').style.display = 'block';
+    await loadGeneratedContents();
+  } catch (err) {
+    alert('Errore generazione: ' + err.message);
+  }
+}
+
+async function createCampaign(e) {
+  e.preventDefault();
+  const data = {
+    name: document.getElementById('cmp-name').value,
+    channel: document.getElementById('cmp-channel').value,
+    template_id: document.getElementById('cmp-template-id').value || null,
+  };
+  try {
+    const res = await fetch(`${API}/campaigns`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    campaignForm.reset();
+    await loadCampaigns();
+  } catch (err) {
+    alert('Errore campagna: ' + err.message);
+  }
+}
+
+async function loadCampaigns() {
+  try {
+    const res = await fetch(`${API}/campaigns`);
+    const campaigns = await res.json();
+    campaignsList.innerHTML = campaigns.map(c => `
+      <li>
+        <strong>${c.name}</strong> (${c.channel}) - ${c.status}
+        <br><small>Generati: ${c.generated_count}</small>
+        <button onclick="runCampaign(${c.id})">Esegui</button>
+      </li>
+    `).join('');
+  } catch (err) {
+    campaignsList.innerHTML = `<li>Errore: ${err.message}</li>`;
+  }
+}
+
+window.runCampaign = async function(id) {
+  try {
+    const res = await fetch(`${API}/campaigns/${id}/run`, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    const generated = await res.json();
+    alert(`Generati ${generated.length} contenuti`);
+    await loadCampaigns();
+    await loadGeneratedContents();
+  } catch (err) {
+    alert('Errore esecuzione: ' + err.message);
+  }
+};
+
+async function loadGeneratedContents() {
+  try {
+    const res = await fetch(`${API}/generated-contents`);
+    const contents = await res.json();
+    contentsList.innerHTML = contents.map(c => `
+      <li>
+        <strong>${c.kind} - ${c.channel || 'generic'}</strong>
+        <br><small>${(c.subject || c.body).substring(0, 80)}...</small>
+      </li>
+    `).join('');
+  } catch (err) {
+    contentsList.innerHTML = `<li>Errore: ${err.message}</li>`;
+  }
+}
 
 btnSnap.addEventListener('click', snap);
 btnRetake.addEventListener('click', retake);
@@ -180,6 +266,8 @@ fileInput.addEventListener('change', e => {
 });
 contactForm.addEventListener('submit', saveContactManual);
 btnRefresh.addEventListener('click', loadContacts);
+campaignForm.addEventListener('submit', createCampaign);
+btnRefreshContents.addEventListener('click', loadGeneratedContents);
 
 document.getElementById('btn-close-report').addEventListener('click', () => {
   document.getElementById('report-section').style.display = 'none';
@@ -187,3 +275,5 @@ document.getElementById('btn-close-report').addEventListener('click', () => {
 
 startCamera();
 loadContacts();
+loadCampaigns();
+loadGeneratedContents();
