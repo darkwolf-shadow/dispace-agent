@@ -1,4 +1,4 @@
-const API = window.location.origin.includes('localhost') ? 'http://localhost:8000' : '';
+const API = window.location.host.includes('localhost') ? window.location.origin : '';
 
 const video = document.getElementById('camera');
 const preview = document.getElementById('preview');
