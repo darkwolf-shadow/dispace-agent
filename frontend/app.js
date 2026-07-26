@@ -1,5 +1,10 @@
 const API = window.location.host.includes('localhost') ? window.location.origin : '';
 
+async function apiFetch(url, opts = {}) {
+  opts.credentials = opts.credentials || 'include';
+  return fetch(url, opts);
+}
+
 const video = document.getElementById('camera');
 const preview = document.getElementById('preview');
 const btnSnap = document.getElementById('btn-snap');
@@ -89,7 +94,7 @@ async function uploadBlob(blob, filename = 'card.jpg') {
   formData.append('file', blob, filename);
 
   try {
-    const res = await fetch(`${API}/upload`, { method: 'POST', body: formData });
+    const res = await apiFetch(`${API}/upload`, { method: 'POST', body: formData });
     if (!res.ok) throw new Error(await res.text());
     const contact = await res.json();
     fillForm(contact);
@@ -107,7 +112,7 @@ async function saveContactManual(e) {
   e.preventDefault();
   const data = getFormData();
   try {
-    const res = await fetch(`${API}/contacts`, {
+    const res = await apiFetch(`${API}/contacts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -123,7 +128,7 @@ async function saveContactManual(e) {
 
 async function enrichContact(id) {
   try {
-    const res = await fetch(`${API}/contacts/${id}/enrich`, { method: 'POST' });
+    const res = await apiFetch(`${API}/contacts/${id}/enrich`, { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     const contact = await res.json();
     alert(`Arricchito: score ${contact.score}\nTag: ${(contact.tags || []).join(', ')}`);
@@ -135,7 +140,7 @@ async function enrichContact(id) {
 
 async function showReport(id) {
   try {
-    const res = await fetch(`${API}/contacts/${id}/report`);
+    const res = await apiFetch(`${API}/contacts/${id}/report`);
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     document.getElementById('report-text').textContent = data.report || 'Nessun report';
@@ -147,7 +152,7 @@ async function showReport(id) {
 
 async function loadContacts() {
   try {
-    const res = await fetch(`${API}/contacts`);
+    const res = await apiFetch(`${API}/contacts`);
     const contacts = await res.json();
     contactsList.innerHTML = contacts.map(c => `
       <li>
@@ -181,7 +186,7 @@ window.generateForContact = generateForContact;
 
 async function generateForContact(id, kind) {
   try {
-    const res = await fetch(`${API}/contacts/${id}/generate/${kind}`, { method: 'POST' });
+    const res = await apiFetch(`${API}/contacts/${id}/generate/${kind}`, { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     const content = await res.json();
     document.getElementById('report-text').textContent = `[${content.kind.toUpperCase()}]\n\nOggetto: ${content.subject || 'N/D'}\n\n${content.body}`;
@@ -200,7 +205,7 @@ async function createCampaign(e) {
     template_id: document.getElementById('cmp-template-id').value || null,
   };
   try {
-    const res = await fetch(`${API}/campaigns`, {
+    const res = await apiFetch(`${API}/campaigns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -215,7 +220,7 @@ async function createCampaign(e) {
 
 async function loadCampaigns() {
   try {
-    const res = await fetch(`${API}/campaigns`);
+    const res = await apiFetch(`${API}/campaigns`);
     const campaigns = await res.json();
     campaignsList.innerHTML = campaigns.map(c => `
       <li>
@@ -231,7 +236,7 @@ async function loadCampaigns() {
 
 window.runCampaign = async function(id) {
   try {
-    const res = await fetch(`${API}/campaigns/${id}/run`, { method: 'POST' });
+    const res = await apiFetch(`${API}/campaigns/${id}/run`, { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     const generated = await res.json();
     alert(`Generati ${generated.length} contenuti`);
@@ -244,7 +249,7 @@ window.runCampaign = async function(id) {
 
 async function loadGeneratedContents() {
   try {
-    const res = await fetch(`${API}/generated-contents`);
+    const res = await apiFetch(`${API}/generated-contents`);
     const contents = await res.json();
     contentsList.innerHTML = contents.map(c => `
       <li>
