@@ -13,5 +13,4 @@ celery==5.4.0
 redis==5.0.6
 openai==1.35.0
 python-dotenv==1.0.1
-duckduckgo-search==6.0.0
 requests==2.32.3

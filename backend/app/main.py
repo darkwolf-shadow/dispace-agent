@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -7,9 +8,10 @@ from typing import Any, Dict, List, Optional
 
 import pytesseract
 import requests
-from duckduckgo_search import DDGS
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 from PIL import Image
@@ -35,7 +37,9 @@ class JSONString(TypeDecorator):
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql://postgres:postgres@db:5432/dispace"
+    database_url: str = "sqlite:////app/data/dispace.db"
+    app_username: Optional[str] = None
+    app_password: Optional[str] = None
     openai_api_key: Optional[str] = None
     openai_base_url: Optional[str] = None
     openrouter_api_key: Optional[str] = None
@@ -44,7 +48,7 @@ class Settings(BaseSettings):
     openrouter_title: str = "DiSpace Lead Capture"
     tavily_api_key: Optional[str] = None
     clearbit_api_key: Optional[str] = None
-    uploads_dir: str = "/app/uploads"
+    uploads_dir: str = "/app/data/uploads"
 
     class Config:
         env_file = ".env"
@@ -69,7 +73,10 @@ elif settings.openai_api_key:
         kwargs["base_url"] = settings.openai_base_url
     openai_client = OpenAI(**kwargs)
 
-engine = create_engine(settings.database_url)
+engine_kwargs = {}
+if settings.database_url.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+engine = create_engine(settings.database_url, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -306,6 +313,40 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    public_paths = {"/", "/login", "/health", "/app.js", "/style.css", "/favicon.ico"}
+    if request.url.path in public_paths or request.method == "OPTIONS":
+        return await call_next(request)
+
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Basic "):
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    try:
+        decoded = base64.b64decode(auth[6:]).decode("utf-8")
+        user, passwd = decoded.split(":", 1)
+    except Exception:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    if user != settings.app_username or passwd != settings.app_password:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    return await call_next(request)
+
+
+security_basic = HTTPBasic()
+
+
+@app.get("/login")
+def login(credentials: HTTPBasicCredentials = Depends(security_basic)):
+    if not settings.app_username or not settings.app_password:
+        raise HTTPException(status_code=403, detail="Login not configured")
+    if credentials.username != settings.app_username or credentials.password != settings.app_password:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {"ok": True}
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -402,15 +443,6 @@ def search_web(query: str, max_results: int = 5) -> List[Dict[str, str]]:
             ]
         except Exception as exc:
             print("Tavily error:", exc)
-
-    try:
-        with DDGS() as ddgs:
-            return [
-                {"title": r.get("title", ""), "url": r.get("href", ""), "snippet": r.get("body", "")}
-                for r in ddgs.text(query, max_results=max_results)
-            ]
-    except Exception as exc:
-        print("DDGS error:", exc)
 
     return []
 

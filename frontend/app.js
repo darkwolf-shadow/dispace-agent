@@ -2,6 +2,11 @@ const API = window.location.host.includes('localhost') ? window.location.origin 
 
 async function apiFetch(url, opts = {}) {
   opts.credentials = opts.credentials || 'include';
+  opts.headers = opts.headers || {};
+  const auth = localStorage.getItem('dispace_auth');
+  if (auth) {
+    opts.headers['Authorization'] = 'Basic ' + auth;
+  }
   return fetch(url, opts);
 }
 
@@ -278,7 +283,39 @@ document.getElementById('btn-close-report').addEventListener('click', () => {
   document.getElementById('report-section').style.display = 'none';
 });
 
-startCamera();
-loadContacts();
-loadCampaigns();
-loadGeneratedContents();
+const loginSection = document.getElementById('login-section');
+const mainApp = document.getElementById('main-app');
+const btnLogin = document.getElementById('btn-login');
+const loginError = document.getElementById('login-error');
+
+function showApp() {
+  if (loginSection) loginSection.style.display = 'none';
+  if (mainApp) mainApp.style.display = 'block';
+  startCamera();
+  loadContacts();
+  loadCampaigns();
+  loadGeneratedContents();
+}
+
+if (btnLogin) {
+  btnLogin.addEventListener('click', async () => {
+    const user = document.getElementById('login-user').value;
+    const pass = document.getElementById('login-pass').value;
+    if (!user || !pass) {
+      loginError.textContent = 'Inserisci utente e password';
+      return;
+    }
+    const token = btoa(user + ':' + pass);
+    const res = await fetch(`${API}/login`, { headers: { 'Authorization': 'Basic ' + token } });
+    if (res.ok) {
+      localStorage.setItem('dispace_auth', token);
+      showApp();
+    } else {
+      loginError.textContent = 'Utente o password errati';
+    }
+  });
+}
+
+if (localStorage.getItem('dispace_auth')) {
+  showApp();
+}
