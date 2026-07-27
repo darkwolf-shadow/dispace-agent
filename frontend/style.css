@@ -88,6 +88,7 @@ form input {
 @media (min-width: 640px) {
   .grid { grid-template-columns: 1fr 1fr; }
 }
+.hint { color: #555; font-size: 0.9rem; margin: 0 0 0.75rem; }
 #campaigns-list, #contents-list {
   list-style: none;
   padding: 0;

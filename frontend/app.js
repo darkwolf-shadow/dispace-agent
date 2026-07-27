@@ -293,7 +293,6 @@ function showApp() {
   if (mainApp) mainApp.style.display = 'block';
   startCamera();
   loadContacts();
-  loadCampaigns();
   loadGeneratedContents();
 }
 

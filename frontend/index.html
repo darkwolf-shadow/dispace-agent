@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>DiSpace Lead Capture</title>
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <header>
@@ -71,31 +71,10 @@
     </section>
 
     <section id="marketing-section">
-      <h2>Marketing Automation</h2>
-      <div class="grid">
-        <div>
-          <h3>Nuova campagna</h3>
-          <form id="campaign-form">
-            <label>Nome <input type="text" id="cmp-name" required></label>
-            <label>Canale
-              <select id="cmp-channel">
-                <option value="email">Email</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="linkedin">LinkedIn</option>
-                <option value="instagram">Instagram (story)</option>
-              </select>
-            </label>
-            <label>Template ID <input type="number" id="cmp-template-id" placeholder="vuoto = default"></label>
-            <div class="controls"><button type="submit">Crea campagna</button></div>
-          </form>
-          <ul id="campaigns-list"></ul>
-        </div>
-        <div>
-          <h3>Contenuti generati</h3>
-          <ul id="contents-list"></ul>
-          <button id="btn-refresh-contents">Aggiorna</button>
-        </div>
-      </div>
+      <h2>Contenuti generati</h2>
+      <p class="hint">Scegli un contatto dalla lista e premi Proposta, WhatsApp, Story o Email.</p>
+      <ul id="contents-list"></ul>
+      <div class="controls"><button id="btn-refresh-contents">Aggiorna</button></div>
     </section>
 
     <section id="contacts-section">
@@ -105,7 +84,7 @@
     </section>
   </main>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
   <script>
     // Accesso libero: mostra subito l'app
     (function() {
