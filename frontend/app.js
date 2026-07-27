@@ -298,7 +298,13 @@ async function loadGeneratedContents() {
   }
 }
 
-btnSnap.addEventListener('click', snap);
+btnSnap.addEventListener('click', () => {
+  if (!video.srcObject) {
+    startCamera();
+  } else {
+    snap();
+  }
+});
 btnRetake.addEventListener('click', retake);
 btnUpload.addEventListener('click', () => currentBlob && uploadBlob(currentBlob));
 fileInput.addEventListener('change', e => {
@@ -322,7 +328,6 @@ const loginError = document.getElementById('login-error');
 function showApp() {
   if (loginSection) loginSection.style.display = 'none';
   if (mainApp) mainApp.style.display = 'block';
-  startCamera();
   loadContacts();
   loadGeneratedContents();
 }
