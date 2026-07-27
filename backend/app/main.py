@@ -17,7 +17,7 @@ from openai import OpenAI
 from PIL import Image
 from pydantic import BaseModel, EmailStr, Field
 from pydantic_settings import BaseSettings
-from sqlalchemy import Column, DateTime, Integer, String, Text, TypeDecorator, create_engine
+from sqlalchemy import Column, DateTime, Integer, String, Text, TypeDecorator, create_engine, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 
@@ -94,6 +94,7 @@ class Contact(Base):
     website = Column(String, nullable=True)
     address = Column(String, nullable=True)
     linkedin = Column(String, nullable=True)
+    extra = Column(JSONString, nullable=True)
     raw_text = Column(Text, nullable=True)
     image_path = Column(String, nullable=True)
     tags = Column(JSONString, nullable=True)
@@ -150,6 +151,13 @@ class GeneratedContent(Base):
 
 
 Base.metadata.create_all(bind=engine)
+
+# SQLite migration: add extra column if missing
+try:
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE contacts ADD COLUMN extra TEXT"))
+except Exception:
+    pass
 
 
 def seed_default_templates():
@@ -213,6 +221,7 @@ class ContactCreate(BaseModel):
     website: Optional[str] = None
     address: Optional[str] = None
     linkedin: Optional[str] = None
+    extra: Optional[Dict[str, Any]] = None
 
 
 class ContactUpdate(BaseModel):
@@ -224,6 +233,7 @@ class ContactUpdate(BaseModel):
     website: Optional[str] = None
     address: Optional[str] = None
     linkedin: Optional[str] = None
+    extra: Optional[Dict[str, Any]] = None
     tags: Optional[List[str]] = None
     score: Optional[int] = None
     report: Optional[str] = None
@@ -416,9 +426,11 @@ def extract_fields(text: str) -> dict:
 
 def extract_fields_with_llm(text: str) -> dict:
     prompt = (
-        "Estrai i dati da questo biglietto da visita. Restituisci SOLO un oggetto JSON "
-        "con le chiavi: name, company, role, email, phone, website, address, linkedin. "
-        "Usa null se un dato non è presente. Non scrivere testo fuori dal JSON.\n\n"
+        "Estrai i dati da questo biglietto da visita o volantino. Restituisci SOLO un oggetto JSON "
+        "con le chiavi: name, company, role, email, phone, website, address, linkedin, extra. "
+        "La chiave extra deve essere un oggetto con tutti gli altri dati rilevanti trovati, "
+        "come partita iva, codice fiscale, CAP, citta, provincia, fax, note, prodotti, servizi. "
+        "Usa null per i dati assenti. Non scrivere testo fuori dal JSON.\n\n"
         f"{text}"
     )
     resp = openai_client.chat.completions.create(
@@ -427,7 +439,7 @@ def extract_fields_with_llm(text: str) -> dict:
             {"role": "system", "content": "Sei un estrattore di dati da biglietti da visita. Restituisci solo JSON."},
             {"role": "user", "content": prompt},
         ],
-        max_tokens=300,
+        max_tokens=500,
     )
     content = resp.choices[0].message.content.strip()
     if content.startswith("```"):
@@ -435,8 +447,11 @@ def extract_fields_with_llm(text: str) -> dict:
         if content.startswith("json"):
             content = content[4:].strip()
     parsed = json.loads(content)
-    allowed = {"name", "company", "role", "email", "phone", "website", "address", "linkedin"}
-    return {k: parsed.get(k) for k in allowed}
+    allowed = {"name", "company", "role", "email", "phone", "website", "address", "linkedin", "extra"}
+    result = {k: parsed.get(k) for k in allowed}
+    if not isinstance(result.get("extra"), dict):
+        result["extra"] = None
+    return result
 
 
 def save_upload(file: UploadFile) -> str:

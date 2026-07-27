@@ -76,9 +76,21 @@ function fillForm(contact) {
   document.getElementById('c-website').value = contact.website || '';
   document.getElementById('c-address').value = contact.address || '';
   document.getElementById('c-linkedin').value = contact.linkedin || '';
+  const extra = contact.extra || {};
+  document.getElementById('c-extra').value = Object.keys(extra).length
+    ? Object.entries(extra).map(([k, v]) => `${k}: ${v}`).join('\n')
+    : '';
 }
 
 function getFormData() {
+  const extraText = document.getElementById('c-extra').value.trim();
+  const extra = {};
+  if (extraText) {
+    for (const line of extraText.split('\n')) {
+      const [k, ...rest] = line.split(':');
+      if (k && rest.length) extra[k.trim()] = rest.join(':').trim();
+    }
+  }
   return {
     name: document.getElementById('c-name').value || null,
     company: document.getElementById('c-company').value || null,
@@ -88,6 +100,7 @@ function getFormData() {
     website: document.getElementById('c-website').value || null,
     address: document.getElementById('c-address').value || null,
     linkedin: document.getElementById('c-linkedin').value || null,
+    extra: Object.keys(extra).length ? extra : null,
   };
 }
 
@@ -167,6 +180,8 @@ async function loadContacts() {
             ${c.company ? `<span>${c.company}</span>` : ''}
             ${c.email ? `<br><small>${c.email}</small>` : ''}
             ${c.phone ? `<small> · ${c.phone}</small>` : ''}
+            ${c.address ? `<br><small>${c.address}</small>` : ''}
+            ${c.extra ? `<br><small>${Object.entries(c.extra).map(([k,v]) => `${k}: ${v}`).join(', ')}</small>` : ''}
             ${c.score ? `<br><small>Score: ${c.score}</small>` : ''}
             ${c.tags ? `<br><small>${c.tags.join(', ')}</small>` : ''}
           </div>
