@@ -10,7 +10,7 @@ import pytesseract
 import requests
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
@@ -695,6 +695,24 @@ def create_contact(payload: ContactCreate, db: Session = Depends(get_db)):
 @app.get("/contacts", response_model=List[ContactOut])
 def list_contacts(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
     return db.query(Contact).order_by(Contact.created_at.desc()).offset(skip).limit(limit).all()
+
+
+@app.get("/contacts/export")
+def export_contacts(format: str = "json", db: Session = Depends(get_db)):
+    contacts = db.query(Contact).order_by(Contact.created_at.desc()).all()
+    rows = [ContactOut.model_validate(c).model_dump() for c in contacts]
+    if format == "csv":
+        import csv
+        import io
+        output = io.StringIO()
+        if rows:
+            writer = csv.DictWriter(output, fieldnames=rows[0].keys())
+            writer.writeheader()
+            writer.writerows(rows)
+        content = output.getvalue()
+        return Response(content=content, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=contacts.csv"})
+    content = json.dumps(rows, default=str, ensure_ascii=False, indent=2)
+    return Response(content=content, media_type="application/json", headers={"Content-Disposition": "attachment; filename=contacts.json"})
 
 
 @app.get("/contacts/{contact_id}", response_model=ContactOut)

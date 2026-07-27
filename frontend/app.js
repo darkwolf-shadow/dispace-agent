@@ -327,6 +327,13 @@ contactForm.addEventListener('submit', saveContactManual);
 btnRefresh.addEventListener('click', loadContacts);
 btnRefreshContents.addEventListener('click', loadGeneratedContents);
 
+document.getElementById('btn-export-json').addEventListener('click', () => {
+  window.location.href = `${API}/contacts/export?format=json`;
+});
+document.getElementById('btn-export-csv').addEventListener('click', () => {
+  window.location.href = `${API}/contacts/export?format=csv`;
+});
+
 document.getElementById('btn-close-report').addEventListener('click', () => {
   document.getElementById('report-section').style.display = 'none';
 });
