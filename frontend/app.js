@@ -121,12 +121,17 @@ function getFormData() {
   };
 }
 
-async function uploadBlob(blob, filename = 'card.jpg') {
+async function uploadFiles(items, filename = 'card.jpg') {
   statusSection.style.display = 'block';
   resultSection.style.display = 'none';
 
   const formData = new FormData();
-  formData.append('file', blob, filename);
+  const files = Array.isArray(items) ? items : [items];
+  for (const item of files) {
+    const blob = item.blob || item;
+    const name = item.filename || filename;
+    formData.append('files', blob, name);
+  }
 
   try {
     const res = await apiFetch(`${API}/upload`, { method: 'POST', body: formData });
@@ -307,14 +312,16 @@ btnSnap.addEventListener('click', () => {
   }
 });
 btnRetake.addEventListener('click', retake);
-btnUpload.addEventListener('click', () => currentBlob && uploadBlob(currentBlob));
+btnUpload.addEventListener('click', () => currentBlob && uploadFiles(currentBlob));
 fileInput.addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (file) uploadBlob(file, file.name);
+  const files = e.target.files;
+  if (files.length) {
+    const items = Array.from(files).map(file => ({ blob: file, filename: file.name }));
+    uploadFiles(items);
+  }
 });
 contactForm.addEventListener('submit', saveContactManual);
 btnRefresh.addEventListener('click', loadContacts);
-campaignForm.addEventListener('submit', createCampaign);
 btnRefreshContents.addEventListener('click', loadGeneratedContents);
 
 document.getElementById('btn-close-report').addEventListener('click', () => {

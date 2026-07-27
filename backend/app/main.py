@@ -652,19 +652,29 @@ def generate_report(contact: Contact, enrichment: Dict[str, Any]) -> str:
 
 
 @app.post("/upload", response_model=ContactOut)
-def upload_business_card(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    try:
-        image_path = save_upload(file)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid image: {exc}") from exc
+def upload_business_card(files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
+    if not files:
+        raise HTTPException(status_code=400, detail="Nessun file caricato")
 
-    try:
-        raw_text = run_ocr(image_path)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"OCR failed: {exc}") from exc
+    all_texts = []
+    first_path = None
+    for file in files:
+        try:
+            image_path = save_upload(file)
+            if first_path is None:
+                first_path = image_path
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid image: {exc}") from exc
 
+        try:
+            text = run_ocr(image_path)
+            all_texts.append(text)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"OCR failed: {exc}") from exc
+
+    raw_text = "\n\n".join(all_texts)
     fields = extract_fields(raw_text)
-    contact = Contact(raw_text=raw_text, image_path=image_path, **fields)
+    contact = Contact(raw_text=raw_text, image_path=first_path, **fields)
     db.add(contact)
     db.commit()
     db.refresh(contact)
