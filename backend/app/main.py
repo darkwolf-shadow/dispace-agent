@@ -449,6 +449,21 @@ def extract_fields_with_llm(text: str) -> dict:
     parsed = json.loads(content)
     allowed = {"name", "company", "role", "email", "phone", "website", "address", "linkedin", "extra"}
     result = {k: parsed.get(k) for k in allowed}
+
+    def to_str(value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value.strip() or None
+        if isinstance(value, (list, tuple)):
+            return ", ".join(str(v) for v in value if v is not None) or None
+        if isinstance(value, dict):
+            return ", ".join(f"{k}: {v}" for k, v in value.items() if v is not None) or None
+        return str(value).strip() or None
+
+    for key in ["name", "company", "role", "email", "phone", "website", "address", "linkedin"]:
+        result[key] = to_str(result.get(key))
+
     if not isinstance(result.get("extra"), dict):
         result["extra"] = None
     return result
