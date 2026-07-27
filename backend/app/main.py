@@ -735,6 +735,16 @@ def get_contact(contact_id: int, db: Session = Depends(get_db)):
     return contact
 
 
+@app.delete("/contacts/{contact_id}")
+def delete_contact(contact_id: int, db: Session = Depends(get_db)):
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    db.delete(contact)
+    db.commit()
+    return {"ok": True}
+
+
 @app.post("/contacts/{contact_id}/enrich", response_model=ContactOut)
 def enrich_contact(contact_id: int, db: Session = Depends(get_db)):
     contact = db.query(Contact).filter(Contact.id == contact_id).first()

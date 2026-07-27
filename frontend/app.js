@@ -218,6 +218,7 @@ async function loadContacts() {
             <button onclick="generateForContact(${c.id}, 'proposal')">Proposta</button>
             <button onclick="generateForContact(${c.id}, 'whatsapp')">WhatsApp</button>
             <button onclick="generateForContact(${c.id}, 'story')">Story</button>
+            <button class="btn-danger" onclick="deleteContact(${c.id})">Elimina</button>
           </div>
         </div>
       </li>
@@ -230,6 +231,17 @@ async function loadContacts() {
 window.enrichContact = enrichContact;
 window.showReport = showReport;
 window.generateForContact = generateForContact;
+
+window.deleteContact = async function(id) {
+  if (!confirm('Vuoi eliminare questo contatto?')) return;
+  try {
+    const res = await apiFetch(`${API}/contacts/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
+    await loadContacts();
+  } catch (err) {
+    alert('Errore eliminazione: ' + err.message);
+  }
+};
 
 async function generateForContact(id, kind) {
   try {

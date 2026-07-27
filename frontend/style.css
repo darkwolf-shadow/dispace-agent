@@ -89,6 +89,7 @@ form input {
   .grid { grid-template-columns: 1fr 1fr; }
 }
 .hint { color: #555; font-size: 0.9rem; margin: 0 0 0.75rem; }
+.btn-danger { background: #c62828; }
 details { margin-bottom: 0.75rem; }
 details summary { font-size: 0.9rem; color: #3949ab; cursor: pointer; }
 pre.raw { background: #f4f4f4; padding: 0.75rem; border-radius: 8px; font-size: 0.85rem; white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto; }
