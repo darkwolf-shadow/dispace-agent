@@ -227,8 +227,8 @@ class ContactUpdate(BaseModel):
     tags: Optional[List[str]] = None
     score: Optional[int] = None
     report: Optional[str] = None
-    source_links: Optional[Dict[str, Any]] = None
-    social_links: Optional[Dict[str, Any]] = None
+    source_links: Optional[Any] = None
+    social_links: Optional[Any] = None
 
 
 class ContactOut(ContactUpdate):
