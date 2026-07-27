@@ -97,6 +97,8 @@ function fillForm(contact) {
     .filter(([k, v]) => v !== null && v !== undefined && String(v).trim() && String(v).trim().toLowerCase() !== 'null')
     .map(([k, v]) => `${k}: ${v}`);
   document.getElementById('c-extra').value = extraLines.length ? extraLines.join('\n') : '';
+  const rawEl = document.getElementById('raw-text');
+  if (rawEl) rawEl.textContent = contact.raw_text || '';
 }
 
 function getFormData() {

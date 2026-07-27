@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>DiSpace Lead Capture</title>
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
   <header>
@@ -47,6 +47,10 @@
 
     <section id="result-section" style="display:none;">
       <h2>Contatto estratto</h2>
+      <details>
+        <summary>Testo rilevato dall'immagine</summary>
+        <pre id="raw-text" class="raw"></pre>
+      </details>
       <form id="contact-form">
         <label>Nome <input type="text" id="c-name" name="name"></label>
         <label>Azienda <input type="text" id="c-company" name="company"></label>
@@ -89,7 +93,7 @@
     </section>
   </main>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
   <script>
     // Accesso libero: mostra subito l'app
     (function() {

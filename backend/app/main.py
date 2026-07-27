@@ -492,6 +492,17 @@ def save_upload(file: UploadFile) -> str:
     return path
 
 
+def deskew(image: Image.Image) -> Image.Image:
+    try:
+        osd = pytesseract.image_to_osd(image, output_type=pytesseract.Output.DICT)
+        angle = osd.get("rotate", 0)
+        if angle:
+            image = image.rotate(angle, expand=True, fillcolor=(255, 255, 255))
+    except Exception:
+        pass
+    return image
+
+
 def run_ocr(image_path: str) -> str:
     image = Image.open(image_path)
     if image.mode in ("RGBA", "P"):
@@ -504,13 +515,14 @@ def run_ocr(image_path: str) -> str:
     if scale > 1:
         image = image.resize((int(width * scale), int(height * scale)), Image.LANCZOS)
 
+    image = deskew(image)
     gray = image.convert("L")
     gray = ImageOps.autocontrast(gray)
-    gray = ImageEnhance.Contrast(gray).enhance(1.5)
-    gray = ImageEnhance.Sharpness(gray).enhance(1.5)
+    gray = ImageEnhance.Contrast(gray).enhance(1.8)
+    gray = ImageEnhance.Sharpness(gray).enhance(1.8)
     gray = gray.filter(ImageFilter.MedianFilter(size=3))
 
-    configs = ["--psm 6", "--psm 3", "--psm 4", "--psm 11"]
+    configs = ["--psm 6", "--psm 3", "--psm 4", "--psm 11", "--psm 1"]
     best = ""
     for config in configs:
         text = pytesseract.image_to_string(gray, lang="ita+eng", config=config)
