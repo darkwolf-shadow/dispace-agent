@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from pydantic import BaseModel, EmailStr, Field
 from pydantic_settings import BaseSettings
 from sqlalchemy import Column, DateTime, Integer, String, Text, TypeDecorator, create_engine, text
@@ -494,15 +494,27 @@ def run_ocr(image_path: str) -> str:
     image = Image.open(image_path)
     if image.mode in ("RGBA", "P"):
         image = image.convert("RGB")
-    gray = image.convert("L")
-    width, height = gray.size
-    scale = max(1, 1200 / max(width, height))
+
+    # Scale up to improve small text readability
+    width, height = image.size
+    target = 2000
+    scale = max(1, target / max(width, height))
     if scale > 1:
-        gray = gray.resize((int(width * scale), int(height * scale)), Image.LANCZOS)
-    text = pytesseract.image_to_string(gray, lang="ita+eng", config="--psm 6")
-    if not text.strip():
-        text = pytesseract.image_to_string(gray, lang="ita+eng", config="--psm 3")
-    return text
+        image = image.resize((int(width * scale), int(height * scale)), Image.LANCZOS)
+
+    gray = image.convert("L")
+    gray = ImageOps.autocontrast(gray)
+    gray = ImageEnhance.Contrast(gray).enhance(1.5)
+    gray = ImageEnhance.Sharpness(gray).enhance(1.5)
+    gray = gray.filter(ImageFilter.MedianFilter(size=3))
+
+    configs = ["--psm 6", "--psm 3", "--psm 4", "--psm 11"]
+    best = ""
+    for config in configs:
+        text = pytesseract.image_to_string(gray, lang="ita+eng", config=config)
+        if len(text.strip()) > len(best.strip()):
+            best = text
+    return best
 
 
 # -------------------- Enrichment & Report Services --------------------
