@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:////app/data/dispace.db"
     app_username: Optional[str] = None
     app_password: Optional[str] = None
+    disable_auth: bool = False
     openai_api_key: Optional[str] = None
     openai_base_url: Optional[str] = None
     openrouter_api_key: Optional[str] = None
@@ -316,7 +317,7 @@ app.add_middleware(
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     public_paths = {"/", "/login", "/health", "/app.js", "/style.css", "/favicon.ico"}
-    if request.url.path in public_paths or request.method == "OPTIONS":
+    if request.url.path in public_paths or request.method == "OPTIONS" or settings.disable_auth:
         return await call_next(request)
 
     auth = request.headers.get("Authorization", "")

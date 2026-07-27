@@ -331,6 +331,5 @@ if (showPass) {
   });
 }
 
-if (localStorage.getItem('dispace_auth')) {
-  showApp();
-}
+// Accesso libero: avvia subito l'applicazione
+showApp();

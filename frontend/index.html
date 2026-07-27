@@ -15,7 +15,7 @@
     <p>Scatta o carica un biglietto da visita</p>
   </header>
 
-  <section id="login-section">
+  <section id="login-section" style="display:none;">
     <h2>Accedi</h2>
     <form id="login-form">
       <label>Utente <input type="text" id="login-user" autocomplete="username"></label>
@@ -26,7 +26,7 @@
     </form>
   </section>
 
-  <main id="main-app" style="display:none;">
+  <main id="main-app">
     <section id="capture-section">
       <video id="camera" autoplay playsinline></video>
       <canvas id="preview" style="display:none;"></canvas>
@@ -107,13 +107,10 @@
 
   <script src="app.js?v=2"></script>
   <script>
-    // Bootstrap login handling before app.js loads
+    // Accesso libero: mostra subito l'app
     (function() {
-      const auth = localStorage.getItem('dispace_auth');
-      if (auth) {
-        document.getElementById('login-section').style.display = 'none';
-        document.getElementById('main-app').style.display = 'block';
-      }
+      document.getElementById('login-section').style.display = 'none';
+      document.getElementById('main-app').style.display = 'block';
     })();
   </script>
 </body>
