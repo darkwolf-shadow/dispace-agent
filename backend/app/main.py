@@ -373,6 +373,12 @@ def extract_fields(text: str) -> dict:
         "linkedin": None,
     }
 
+    if openai_client:
+        try:
+            return extract_fields_with_llm(text)
+        except Exception:
+            pass
+
     for line in lines:
         if not data["email"]:
             m = re.search(r"[\w.-]+@[\w.-]+\.\w{2,}", line)
@@ -406,6 +412,31 @@ def extract_fields(text: str) -> dict:
         data["company"] = lines[2]
 
     return data
+
+
+def extract_fields_with_llm(text: str) -> dict:
+    prompt = (
+        "Estrai i dati da questo biglietto da visita. Restituisci SOLO un oggetto JSON "
+        "con le chiavi: name, company, role, email, phone, website, address, linkedin. "
+        "Usa null se un dato non è presente. Non scrivere testo fuori dal JSON.\n\n"
+        f"{text}"
+    )
+    resp = openai_client.chat.completions.create(
+        model="openai/gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "Sei un estrattore di dati da biglietti da visita. Restituisci solo JSON."},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=300,
+    )
+    content = resp.choices[0].message.content.strip()
+    if content.startswith("```"):
+        content = content.split("\n", 1)[1].rsplit("\n", 1)[0]
+        if content.startswith("json"):
+            content = content[4:].strip()
+    parsed = json.loads(content)
+    allowed = {"name", "company", "role", "email", "phone", "website", "address", "linkedin"}
+    return {k: parsed.get(k) for k in allowed}
 
 
 def save_upload(file: UploadFile) -> str:
