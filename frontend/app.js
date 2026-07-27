@@ -168,12 +168,15 @@ async function saveContactManual(e) {
 
 async function enrichContact(id) {
   try {
+    document.getElementById('report-text').textContent = 'Arricchimento in corso, attendi...';
+    document.getElementById('report-section').style.display = 'block';
     const res = await apiFetch(`${API}/contacts/${id}/enrich`, { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     const contact = await res.json();
-    alert(`Arricchito: score ${contact.score}\nTag: ${(contact.tags || []).join(', ')}`);
+    document.getElementById('report-text').textContent = contact.report || `Score: ${contact.score}\nTag: ${(contact.tags || []).join(', ')}`;
     await loadContacts();
   } catch (err) {
+    document.getElementById('report-text').textContent = 'Errore enrichment: ' + err.message;
     alert('Errore enrichment: ' + err.message);
   }
 }
