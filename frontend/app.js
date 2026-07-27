@@ -323,6 +323,14 @@ if (loginForm) {
   });
 }
 
+const showPass = document.getElementById('show-pass');
+if (showPass) {
+  showPass.addEventListener('change', () => {
+    const passInput = document.getElementById('login-pass');
+    passInput.type = showPass.checked ? 'text' : 'password';
+  });
+}
+
 if (localStorage.getItem('dispace_auth')) {
   showApp();
 }
