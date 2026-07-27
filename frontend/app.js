@@ -29,15 +29,31 @@ const btnRefreshContents = document.getElementById('btn-refresh-contents');
 let currentBlob = null;
 
 async function startCamera() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    video.srcObject = stream;
-    btnSnap.disabled = false;
-  } catch (err) {
-    console.error('Camera error:', err);
-    btnSnap.disabled = true;
-    btnSnap.textContent = 'Camera non disponibile';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    btnSnap.textContent = 'Fotocamera non supportata';
+    return;
   }
+  const constraints = [
+    { video: { facingMode: { exact: 'environment' } } },
+    { video: { facingMode: 'environment' } },
+    { video: true },
+  ];
+  let lastErr = null;
+  for (const c of constraints) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(c);
+      video.srcObject = stream;
+      await video.play();
+      btnSnap.disabled = false;
+      btnSnap.textContent = 'Scatta';
+      return;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  console.error('Camera error:', lastErr);
+  btnSnap.textContent = 'Permetti la fotocamera e ricarica';
+  alert('Non riesco ad accedere alla fotocamera. Assicurati di aver dato il permesso e che il sito sia aperto in HTTPS.');
 }
 
 function snap() {
