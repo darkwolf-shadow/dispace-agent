@@ -419,7 +419,17 @@ def save_upload(file: UploadFile) -> str:
 
 def run_ocr(image_path: str) -> str:
     image = Image.open(image_path)
-    return pytesseract.image_to_string(image, lang="ita+eng")
+    if image.mode in ("RGBA", "P"):
+        image = image.convert("RGB")
+    gray = image.convert("L")
+    width, height = gray.size
+    scale = max(1, 1200 / max(width, height))
+    if scale > 1:
+        gray = gray.resize((int(width * scale), int(height * scale)), Image.LANCZOS)
+    text = pytesseract.image_to_string(gray, lang="ita+eng", config="--psm 6")
+    if not text.strip():
+        text = pytesseract.image_to_string(gray, lang="ita+eng", config="--psm 3")
+    return text
 
 
 # -------------------- Enrichment & Report Services --------------------
