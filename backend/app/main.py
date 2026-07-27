@@ -428,9 +428,11 @@ def extract_fields_with_llm(text: str) -> dict:
     prompt = (
         "Estrai i dati da questo biglietto da visita o volantino. Restituisci SOLO un oggetto JSON "
         "con le chiavi: name, company, role, email, phone, website, address, linkedin, extra. "
-        "La chiave extra deve essere un oggetto con tutti gli altri dati rilevanti trovati, "
-        "come partita iva, codice fiscale, CAP, citta, provincia, fax, note, prodotti, servizi. "
-        "Usa null per i dati assenti. Non scrivere testo fuori dal JSON.\n\n"
+        "Se ci sono piu numeri di telefono, mettili tutti nella chiave phone separati da ' / '. "
+        "Se ci sono piu indirizzi, mettili tutti nella chiave address separati da ' / '. "
+        "La chiave extra deve contenere solo i dati rilevanti trovati "
+        "(partita iva, codice fiscale, CAP, citta, provincia, fax, note, prodotti, servizi). "
+        "Ometti le chiavi di extra per cui non hai trovato nulla. Non scrivere testo fuori dal JSON.\n\n"
         f"{text}"
     )
     resp = openai_client.chat.completions.create(
@@ -454,7 +456,10 @@ def extract_fields_with_llm(text: str) -> dict:
         if value is None:
             return None
         if isinstance(value, str):
-            return value.strip() or None
+            value = value.strip()
+            if value.lower() in ("null", "none", ""):
+                return None
+            return value
         if isinstance(value, (list, tuple)):
             return ", ".join(str(v) for v in value if v is not None) or None
         if isinstance(value, dict):
@@ -464,7 +469,14 @@ def extract_fields_with_llm(text: str) -> dict:
     for key in ["name", "company", "role", "email", "phone", "website", "address", "linkedin"]:
         result[key] = to_str(result.get(key))
 
-    if not isinstance(result.get("extra"), dict):
+    raw_extra = result.get("extra")
+    if isinstance(raw_extra, dict):
+        clean_extra = {
+            k: v for k, v in raw_extra.items()
+            if v is not None and str(v).strip() and str(v).strip().lower() not in ("null", "none")
+        }
+        result["extra"] = clean_extra or None
+    else:
         result["extra"] = None
     return result
 

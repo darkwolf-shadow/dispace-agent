@@ -93,9 +93,10 @@ function fillForm(contact) {
   document.getElementById('c-address').value = contact.address || '';
   document.getElementById('c-linkedin').value = contact.linkedin || '';
   const extra = contact.extra || {};
-  document.getElementById('c-extra').value = Object.keys(extra).length
-    ? Object.entries(extra).map(([k, v]) => `${k}: ${v}`).join('\n')
-    : '';
+  const extraLines = Object.entries(extra)
+    .filter(([k, v]) => v !== null && v !== undefined && String(v).trim() && String(v).trim().toLowerCase() !== 'null')
+    .map(([k, v]) => `${k}: ${v}`);
+  document.getElementById('c-extra').value = extraLines.length ? extraLines.join('\n') : '';
 }
 
 function getFormData() {
@@ -197,7 +198,7 @@ async function loadContacts() {
             ${c.email ? `<br><small>${c.email}</small>` : ''}
             ${c.phone ? `<small> · ${c.phone}</small>` : ''}
             ${c.address ? `<br><small>${c.address}</small>` : ''}
-            ${c.extra ? `<br><small>${Object.entries(c.extra).map(([k,v]) => `${k}: ${v}`).join(', ')}</small>` : ''}
+            ${c.extra ? `<br><small>${Object.entries(c.extra).filter(([k,v]) => v !== null && String(v).trim() && String(v).trim().toLowerCase() !== 'null').map(([k,v]) => `${k}: ${v}`).join(', ')}</small>` : ''}
             ${c.score ? `<br><small>Score: ${c.score}</small>` : ''}
             ${c.tags ? `<br><small>${c.tags.join(', ')}</small>` : ''}
           </div>
