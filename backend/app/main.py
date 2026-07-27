@@ -430,6 +430,8 @@ def extract_fields_with_llm(text: str) -> dict:
         "con le chiavi: name, company, role, email, phone, website, address, linkedin, extra. "
         "Se ci sono piu numeri di telefono, mettili tutti nella chiave phone separati da ' / '. "
         "Se ci sono piu indirizzi, mettili tutti nella chiave address separati da ' / '. "
+        "Se vedi un sito web scritto come www.nomesito.com, nomesito.it o simile, inseriscilo nella chiave website. "
+        "Se manca https:// non aggiungerlo. "
         "La chiave extra deve contenere solo i dati rilevanti trovati "
         "(partita iva, codice fiscale, CAP, citta, provincia, fax, note, prodotti, servizi). "
         "Ometti le chiavi di extra per cui non hai trovato nulla. Non scrivere testo fuori dal JSON.\n\n"
