@@ -297,22 +297,29 @@ function showApp() {
   loadGeneratedContents();
 }
 
-if (btnLogin) {
-  btnLogin.addEventListener('click', async () => {
-    const user = document.getElementById('login-user').value;
-    const pass = document.getElementById('login-pass').value;
-    if (!user || !pass) {
-      loginError.textContent = 'Inserisci utente e password';
-      return;
-    }
-    const token = btoa(user + ':' + pass);
-    const res = await fetch(`${API}/login`, { headers: { 'Authorization': 'Basic ' + token } });
-    if (res.ok) {
-      localStorage.setItem('dispace_auth', token);
-      showApp();
-    } else {
-      loginError.textContent = 'Utente o password errati';
-    }
+async function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if (!user || !pass) {
+    loginError.textContent = 'Inserisci utente e password';
+    return;
+  }
+  const token = btoa(user + ':' + pass);
+  loginError.textContent = 'Controllo in corso...';
+  const res = await fetch(`${API}/login`, { headers: { 'Authorization': 'Basic ' + token } });
+  if (res.ok) {
+    localStorage.setItem('dispace_auth', token);
+    showApp();
+  } else {
+    loginError.textContent = 'Utente o password errati';
+  }
+}
+
+const loginForm = document.getElementById('login-form');
+if (loginForm) {
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    doLogin();
   });
 }
 

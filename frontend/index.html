@@ -14,10 +14,12 @@
 
   <section id="login-section">
     <h2>Accedi</h2>
-    <label>Utente <input type="text" id="login-user"></label>
-    <label>Password <input type="password" id="login-pass"></label>
-    <div class="controls"><button id="btn-login">Entra</button></div>
-    <p id="login-error" style="color:red;"></p>
+    <form id="login-form">
+      <label>Utente <input type="text" id="login-user" autocomplete="username"></label>
+      <label>Password <input type="password" id="login-pass" autocomplete="current-password"></label>
+      <div class="controls"><button type="submit" id="btn-login">Entra</button></div>
+      <p id="login-error" style="color:red;"></p>
+    </form>
   </section>
 
   <main id="main-app" style="display:none;">
