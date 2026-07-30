@@ -659,25 +659,26 @@ def run_ocr(image_path: str) -> str:
 
 
 def search_web(query: str, max_results: int = 5) -> List[Dict[str, str]]:
-    if settings.tavily_api_key:
-        try:
-            resp = requests.post(
-                "https://api.tavily.com/search",
-                json={
-                    "api_key": settings.tavily_api_key,
-                    "query": query,
-                    "max_results": max_results,
-                },
-                timeout=20,
-            )
-            resp.raise_for_status()
-            return [
-                {"title": r.get("title"), "url": r.get("url"), "snippet": r.get("content", "")}
-                for r in resp.json().get("results", [])
-            ]
-        except Exception as exc:
-            print("Tavily error:", exc)
-
+    try:
+        headers = {"Content-Type": "application/json"}
+        payload = {"query": query, "max_results": max_results}
+        if settings.tavily_api_key:
+            headers["Authorization"] = f"Bearer {settings.tavily_api_key}"
+        else:
+            headers["X-Tavily-Access-Mode"] = "keyless"
+        resp = requests.post(
+            "https://api.tavily.com/search",
+            headers=headers,
+            json=payload,
+            timeout=20,
+        )
+        resp.raise_for_status()
+        return [
+            {"title": r.get("title"), "url": r.get("url"), "snippet": r.get("content", "")}
+            for r in resp.json().get("results", [])
+        ]
+    except Exception as exc:
+        print("Tavily error:", exc)
     return []
 
 
