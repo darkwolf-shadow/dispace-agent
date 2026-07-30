@@ -27,6 +27,7 @@ const contentsList = document.getElementById('contents-list');
 const btnRefreshContents = document.getElementById('btn-refresh-contents');
 
 let currentBlob = null;
+let currentContactId = null;
 
 async function startCamera() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -84,6 +85,11 @@ function retake() {
 }
 
 function fillForm(contact) {
+  currentContactId = contact.id || null;
+  const submitBtn = contactForm.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.textContent = currentContactId ? 'Aggiorna contatto' : 'Salva contatto';
+  }
   document.getElementById('c-name').value = contact.name || '';
   document.getElementById('c-company').value = contact.company || '';
   document.getElementById('c-role').value = contact.role || '';
@@ -154,13 +160,15 @@ async function saveContactManual(e) {
   e.preventDefault();
   const data = getFormData();
   try {
-    const res = await apiFetch(`${API}/contacts`, {
-      method: 'POST',
+    const url = currentContactId ? `${API}/contacts/${currentContactId}` : `${API}/contacts`;
+    const method = currentContactId ? 'PUT' : 'POST';
+    const res = await apiFetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error(await res.text());
-    alert('Contatto salvato');
+    alert(currentContactId ? 'Contatto aggiornato' : 'Contatto salvato');
     resultSection.style.display = 'none';
     await loadContacts();
   } catch (err) {

@@ -757,6 +757,19 @@ def create_contact(payload: ContactCreate, db: Session = Depends(get_db)):
     return contact
 
 
+@app.put("/contacts/{contact_id}", response_model=ContactOut)
+def update_contact(contact_id: int, payload: ContactUpdate, db: Session = Depends(get_db)):
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(contact, key, value)
+    contact.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(contact)
+    return contact
+
+
 @app.get("/contacts", response_model=List[ContactOut])
 def list_contacts(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
     return db.query(Contact).order_by(Contact.created_at.desc()).offset(skip).limit(limit).all()
