@@ -16,7 +16,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from pydantic_settings import BaseSettings
 from sqlalchemy import Column, DateTime, Integer, String, Text, TypeDecorator, create_engine, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
