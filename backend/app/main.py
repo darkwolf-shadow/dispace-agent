@@ -863,6 +863,73 @@ def update_company_profile(payload: CompanyProfileUpdate, db: Session = Depends(
     return profile
 
 
+def fetch_website_text(url: str) -> str:
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, timeout=15, headers=headers)
+        r.raise_for_status()
+        # Very basic tag stripping
+        text = re.sub(r"<script[^>]*>.*?</script>", " ", r.text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<style[^>]*>.*?</style>", " ", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:8000]
+    except Exception as exc:
+        print("fetch website error:", exc)
+    return ""
+
+
+def enrich_company_profile_with_llm(website_text: str, url: str) -> dict:
+    prompt = (
+        "Analizza il testo di questo sito aziendale ed estrai le informazioni chiave. "
+        "Restituisci SOLO un oggetto JSON con le chiavi: name, description, products, services, values, target, channels, website, email, phone, address, tone. "
+        "products e services sono elenchi separati da virgola. "
+        "channels è un elenco di canali di comunicazione (sito web, email, telefono, social). "
+        "tone è un aggettivo che descrive il tono comunicativo (professionale, cordiale, informale, elegante, ecc.). "
+        "Non scrivere testo fuori dal JSON.\n\n"
+        f"URL: {url}\n\n{website_text}"
+    )
+    resp = openai_client.chat.completions.create(
+        model="openai/gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "Sei un analista di siti aziendali. Restituisci solo JSON."},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=600,
+    )
+    content = resp.choices[0].message.content.strip()
+    if content.startswith("```"):
+        content = content.split("\n", 1)[1].rsplit("\n", 1)[0]
+        if content.startswith("json"):
+            content = content[4:].strip()
+    parsed = json.loads(content)
+    return {k: parsed.get(k) for k in ["name", "description", "products", "services", "values", "target", "channels", "website", "email", "phone", "address", "tone"]}
+
+
+@app.post("/company-profile/enrich", response_model=CompanyProfileOut)
+def enrich_company_profile(website: Optional[str] = None, db: Session = Depends(get_db)):
+    profile = get_or_create_company_profile(db)
+    url = website or profile.website or ""
+    if not url:
+        raise HTTPException(status_code=400, detail="Nessun sito web fornito")
+    text = fetch_website_text(url)
+    if not text:
+        raise HTTPException(status_code=500, detail="Impossibile leggere il sito web")
+    try:
+        data = enrich_company_profile_with_llm(text, url)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Errore AI: {exc}") from exc
+    for key, value in data.items():
+        if value:
+            setattr(profile, key, value)
+    profile.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
 @app.post("/contacts", response_model=ContactOut)
 def create_contact(payload: ContactCreate, db: Session = Depends(get_db)):
     contact = Contact(**payload.model_dump(exclude_unset=True))

@@ -7,13 +7,14 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>DiSpace Lead Capture</title>
-  <link rel="stylesheet" href="style.css?v=18">
+  <link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
   <header>
     <h1>DiSpace Lead Capture</h1>
     <p id="owner-name"></p>
     <p>Scatta o carica un biglietto da visita</p>
+    <button id="btn-open-company" class="btn-link" type="button">La mia azienda</button>
   </header>
 
   <section id="login-section" style="display:none;">
@@ -76,22 +77,29 @@
       </div>
     </section>
 
-    <section id="company-section">
-      <h2>La mia azienda</h2>
-      <form id="company-form">
-        <label>Nome azienda <input type="text" id="cp-name" name="name"></label>
-        <label>Descrizione <textarea id="cp-description" name="description" rows="3" placeholder="Cosa fa l'azienda"></textarea></label>
-        <label>Prodotti <textarea id="cp-products" name="products" rows="2" placeholder="Elenca i prodotti principali"></textarea></label>
-        <label>Servizi <textarea id="cp-services" name="services" rows="2" placeholder="Servizi offerti"></textarea></label>
-        <label>Valori <textarea id="cp-values" name="values" rows="2" placeholder="Valori dell'azienda"></textarea></label>
-        <label>Target <textarea id="cp-target" name="target" rows="2" placeholder="Tipologia di clienti ideali"></textarea></label>
-        <label>Tono comunicazione <input type="text" id="cp-tone" name="tone" placeholder="professionale e cordiale / informale / elegante"></label>
-        <label>Sito <input type="text" id="cp-website" name="website"></label>
-        <label>Email <input type="text" id="cp-email" name="email"></label>
-        <label>Telefono <input type="tel" id="cp-phone" name="phone"></label>
-        <label>Indirizzo <input type="text" id="cp-address" name="address"></label>
-        <div class="controls"><button type="submit">Salva profilo azienda</button></div>
-      </form>
+    <section id="company-section" class="modal" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>La mia azienda</h2>
+          <button id="btn-close-company" class="btn-link" type="button">Chiudi</button>
+        </div>
+        <form id="company-form">
+          <label>Sito azienda <input type="text" id="cp-website" name="website" placeholder="www.fattoriailcapitano.com"></label>
+          <div class="controls"><button type="button" id="btn-enrich-company">Arricchisci da sito</button></div>
+          <label>Nome azienda <input type="text" id="cp-name" name="name"></label>
+          <label>Descrizione <textarea id="cp-description" name="description" rows="3" placeholder="Cosa fa l'azienda"></textarea></label>
+          <label>Prodotti <textarea id="cp-products" name="products" rows="2" placeholder="Elenca i prodotti principali"></textarea></label>
+          <label>Servizi <textarea id="cp-services" name="services" rows="2" placeholder="Servizi offerti"></textarea></label>
+          <label>Valori <textarea id="cp-values" name="values" rows="2" placeholder="Valori dell'azienda"></textarea></label>
+          <label>Target <textarea id="cp-target" name="target" rows="2" placeholder="Tipologia di clienti ideali"></textarea></label>
+          <label>Canali <textarea id="cp-channels" name="channels" rows="2" placeholder="Sito, email, social, telefono"></textarea></label>
+          <label>Tono comunicazione <input type="text" id="cp-tone" name="tone" placeholder="professionale e cordiale / informale / elegante"></label>
+          <label>Email <input type="text" id="cp-email" name="email"></label>
+          <label>Telefono <input type="tel" id="cp-phone" name="phone"></label>
+          <label>Indirizzo <input type="text" id="cp-address" name="address"></label>
+          <div class="controls"><button type="submit">Salva profilo azienda</button></div>
+        </form>
+      </div>
     </section>
 
     <section id="marketing-section">
@@ -112,7 +120,7 @@
     </section>
   </main>
 
-  <script src="app.js?v=18"></script>
+  <script src="app.js?v=19"></script>
   <script>
     // Accesso libero: mostra subito l'app
     (function() {

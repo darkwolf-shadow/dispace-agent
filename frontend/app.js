@@ -26,6 +26,10 @@ const campaignsList = document.getElementById('campaigns-list');
 const contentsList = document.getElementById('contents-list');
 const btnRefreshContents = document.getElementById('btn-refresh-contents');
 const companyForm = document.getElementById('company-form');
+const companySection = document.getElementById('company-section');
+const btnOpenCompany = document.getElementById('btn-open-company');
+const btnCloseCompany = document.getElementById('btn-close-company');
+const btnEnrichCompany = document.getElementById('btn-enrich-company');
 
 let currentBlob = null;
 let currentContactId = null;
@@ -226,6 +230,31 @@ async function saveCompanyProfile(e) {
   }
 }
 
+async function enrichCompanyProfile() {
+  const website = document.getElementById('cp-website').value.trim();
+  if (!website) {
+    alert('Inserisci prima il sito web dell\'azienda');
+    return;
+  }
+  btnEnrichCompany.disabled = true;
+  btnEnrichCompany.textContent = 'Lettura in corso...';
+  try {
+    const res = await apiFetch(`${API}/company-profile/enrich?website=${encodeURIComponent(website)}`, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    const profile = await res.json();
+    for (const key of ['name', 'description', 'products', 'services', 'values', 'target', 'channels', 'website', 'email', 'phone', 'address', 'tone']) {
+      const el = document.getElementById(`cp-${key}`);
+      if (el) el.value = profile[key] || '';
+    }
+    alert('Profilo arricchito dal sito web');
+  } catch (err) {
+    alert('Errore arricchimento azienda: ' + err.message);
+  } finally {
+    btnEnrichCompany.disabled = false;
+    btnEnrichCompany.textContent = 'Arricchisci da sito';
+  }
+}
+
 async function showReport(id) {
   try {
     const res = await apiFetch(`${API}/contacts/${id}/report`);
@@ -391,6 +420,9 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
   window.location.href = `${API}/contacts/export?format=csv`;
 });
 if (companyForm) companyForm.addEventListener('submit', saveCompanyProfile);
+if (btnOpenCompany) btnOpenCompany.addEventListener('click', () => { companySection.style.display = 'flex'; loadCompanyProfile(); });
+if (btnCloseCompany) btnCloseCompany.addEventListener('click', () => { companySection.style.display = 'none'; });
+if (btnEnrichCompany) btnEnrichCompany.addEventListener('click', enrichCompanyProfile);
 
 document.getElementById('btn-close-report').addEventListener('click', () => {
   document.getElementById('report-section').style.display = 'none';
