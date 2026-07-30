@@ -827,7 +827,8 @@ def enrich_contact_data(contact: Contact) -> Dict[str, Any]:
 
     snippets = "\n".join(r.get("snippet", "") for r in top)
     links = detect_social_links(snippets, top)
-    return {"results": top, "social_links": links}
+    confidence = "alta" if (company and locations) else ("media" if (company or locations) else "bassa")
+    return {"results": top, "social_links": links, "confidence": confidence}
 
 
 def score_and_tag(contact: Contact) -> (int, List[str]):
@@ -860,6 +861,7 @@ def score_and_tag(contact: Contact) -> (int, List[str]):
 def generate_report(contact: Contact, enrichment: Dict[str, Any], company: CompanyProfile) -> str:
     data = enrichment.get("results", [])
     social = enrichment.get("social_links", {})
+    confidence = enrichment.get("confidence", "bassa")
     snippets = "\n".join(f"- {r.get('title', '')} ({r.get('url', '')}):\n  {r.get('snippet', '')}" for r in data)
 
     company_info = (
@@ -872,19 +874,31 @@ def generate_report(contact: Contact, enrichment: Dict[str, Any], company: Compa
         f"Tono: {company.tone or 'professionale e cordiale'}\n"
     )
 
+    confidence_note = (
+        f"Affidabilità identificazione contatto: {confidence.upper()}. "
+    )
+    if confidence == "bassa":
+        confidence_note += "Il biglietto non contiene azienda né sede, quindi i dati potrebbero riferirsi a un omonimo. Verifica sempre prima di contattare."
+    elif confidence == "media":
+        confidence_note += "Alcuni dati (azienda o sede) sono presenti, ma la verifica rimane consigliata."
+    else:
+        confidence_note += "Azienda e sede sono state trovate sul biglietto: l'identificazione è più affidabile."
+
     if openai_client:
         try:
             prompt = (
                 "Sei un analista commerciale senior. Scrivi un report di analisi in italiano sul contatto e sulla sua azienda. "
                 "NON scrivere una lettera di presentazione. Non usare frasi di cortesia. "
+                f"{confidence_note}\n\n"
                 "Organizza il testo in sezioni numerate con titoli chiari:\n\n"
-                "1. PROFILO AZIENDA DEL CONTATTO: cosa fa l'azienda del contatto, settore, dimensione (se nota), tipo di clientela.\n"
-                "2. PRODOTTI O SERVIZI DEL CONTATTO: elenca i prodotti/servizi principali che emergono dalle fonti, senza inventare.\n"
-                "3. PRESENZA ONLINE: social trovati, sito web, eventuali recensioni o canali.\n"
-                "4. DATI RILEVANTI: premi, pubblicazioni, eventi, partnership, certificazioni trovate.\n"
-                "5. ANALISI MATCH CON I PRODOTTI DELL'AZIENDA PROPRIETARIA: confronta punto per punto i prodotti della nostra azienda con le esigenze del contatto. Sii specifico: indica quali prodotti potrebbero interessare e perché.\n"
-                "6. APPROCCIO COMMERCIALE SUGGERITO: come contattarlo, che argomenti usare, eventuali obiezioni da anticipare.\n"
-                "7. FONTI: elenca le fonti principali usate.\n\n"
+                "1. AFFIDABILITÀ E AVVISO: ripeti il livello di affidabilità e spiega che bisogna verificare i dati se l'affidabilità è bassa.\n"
+                "2. PROFILO AZIENDA DEL CONTATTO: cosa fa l'azienda del contatto, settore, dimensione (se nota), tipo di clientela.\n"
+                "3. PRODOTTI O SERVIZI DEL CONTATTO: elenca i prodotti/servizi principali che emergono dalle fonti, senza inventare.\n"
+                "4. PRESENZA ONLINE: social trovati, sito web, eventuali recensioni o canali.\n"
+                "5. DATI RILEVANTI: premi, pubblicazioni, eventi, partnership, certificazioni trovate.\n"
+                "6. ANALISI MATCH CON I PRODOTTI DELL'AZIENDA PROPRIETARIA: confronta punto per punto i prodotti della nostra azienda con le esigenze del contatto. Sii specifico: indica quali prodotti potrebbero interessare e perché.\n"
+                "7. APPROCCIO COMMERCIALE SUGGERITO: come contattarlo, che argomenti usare, eventuali obiezioni da anticipare.\n"
+                "8. FONTI: elenca le fonti principali usate.\n\n"
                 f"{company_info}\n"
                 f"Nome contatto: {contact.name}\nAzienda contatto: {contact.company}\nRuolo: {contact.role}\n"
                 f"Sito: {contact.website}\nLinkedIn: {contact.linkedin}\n\n"
