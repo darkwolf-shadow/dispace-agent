@@ -762,19 +762,51 @@ def detect_social_links(text: str, results: List[Dict[str, str]]) -> Dict[str, s
     return links
 
 
+def _extract_locations(address: Optional[str]) -> List[str]:
+    if not address:
+        return []
+    # Pick alphabetic tokens with length >= 3, excluding common generic words
+    words = re.findall(r"[A-Za-zÀ-ÿ]{3,}", address)
+    generic = {"via", "loc", "piazza", "corso", "strada", "numero", "int", "telefono", "tel", "fax", "uff", "mag"}
+    return [w for w in words if w.lower() not in generic]
+
+
+def _result_relevance(result: Dict[str, str], contact: Contact, locations: List[str]) -> int:
+    text = f"{result.get('title', '')} {result.get('snippet', '')} {result.get('url', '')}".lower()
+    score = 0
+    if contact.company and re.sub(r'[^a-z0-9]', '', contact.company.lower()) in re.sub(r'[^a-z0-9]', '', text):
+        score += 10
+    if contact.name and contact.name.lower().split() and all(part.lower() in text for part in contact.name.lower().split() if len(part) > 2):
+        score += 8
+    for loc in locations:
+        if loc.lower() in text:
+            score += 6
+    if ".it" in result.get("url", ""):
+        score += 4
+    if "dubai" in text or "uae" in text or "emirates" in text:
+        score -= 15
+    if "linkedin.com" in result.get("url", "") and contact.company and contact.company.lower() in text:
+        score += 5
+    return max(score, 0)
+
+
 def enrich_contact_data(contact: Contact) -> Dict[str, Any]:
     results = []
     company = contact.company or ""
     name = contact.name or ""
+    locations = _extract_locations(contact.address)
+    geo = " ".join(locations[:3])
+    it_hint = "site:it" if not any(x in (contact.address or "").lower() for x in ["dubai", "uae", "usa", "uk"]) else ""
+
     if company:
-        results.extend(search_web(f"{company} azienda sito ufficiale contatti", max_results=5))
-        results.extend(search_web(f"{company} prodotti servizi settore", max_results=5))
-        results.extend(search_web(f"{company} notizie premi eventi", max_results=4))
-        results.extend(search_web(f"{company} linkedin instagram facebook", max_results=3))
+        results.extend(search_web(f"{company} azienda sito ufficiale contatti {geo} {it_hint}", max_results=5))
+        results.extend(search_web(f"{company} prodotti servizi settore {geo}", max_results=5))
+        results.extend(search_web(f"{company} notizie premi eventi {geo}", max_results=4))
+        results.extend(search_web(f"{company} {geo} linkedin instagram facebook", max_results=3))
     if name and company:
-        results.extend(search_web(f"{name} {company} LinkedIn", max_results=4))
+        results.extend(search_web(f"{name} {company} {geo} LinkedIn {it_hint}", max_results=5))
     elif name:
-        results.extend(search_web(f"{name} LinkedIn", max_results=4))
+        results.extend(search_web(f"{name} {geo} LinkedIn {it_hint}", max_results=5))
 
     # deduplicate by URL
     seen = set()
@@ -784,9 +816,18 @@ def enrich_contact_data(contact: Contact) -> Dict[str, Any]:
         if url and url not in seen:
             seen.add(url)
             unique.append(r)
-    snippets = "\n".join(r.get("snippet", "") for r in unique)
-    links = detect_social_links(snippets, unique)
-    return {"results": unique, "social_links": links}
+
+    # score and filter out likely wrong matches
+    scored = [(_result_relevance(r, contact, locations), r) for r in unique]
+    scored.sort(key=lambda x: x[0], reverse=True)
+    # Keep results with a minimum score, but always keep at least a few if available
+    top = [r for _, r in scored if _result_relevance(r, contact, locations) >= 6]
+    if len(top) < 3 and scored:
+        top = [r for _, r in scored[:max(5, len(scored))]]
+
+    snippets = "\n".join(r.get("snippet", "") for r in top)
+    links = detect_social_links(snippets, top)
+    return {"results": top, "social_links": links}
 
 
 def score_and_tag(contact: Contact) -> (int, List[str]):
