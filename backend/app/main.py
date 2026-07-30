@@ -756,23 +756,29 @@ def generate_report(contact: Contact, enrichment: Dict[str, Any], company: Compa
     if openai_client:
         try:
             prompt = (
-                "Sei un consulente commerciale per l'azienda descritta sopra. "
-                "Genera un report sintetico in italiano sul contatto, evidenziando come "
-                "i prodotti/servizi dell'azienda possono interessare questo contatto. "
-                "Massimo 300 parole.\n\n"
+                "Sei un analista commerciale. Scrivi un report di analisi in italiano sul contatto e la sua azienda. "
+                "NON scrivere una lettera di presentazione. "
+                "Organizza il testo nelle seguenti sezioni, con titoli chiari e un massimo di 300 parole totali:\n"
+                "1. Attività e settore del contatto\n"
+                "2. Prodotti o servizi principali emersi dalle fonti\n"
+                "3. Presenza online e social trovati\n"
+                "4. Dati rilevanti dal web (premi, pubblicazioni, eventi, partnership)\n"
+                "5. Perché potrebbe essere interessato ai prodotti dell'azienda proprietaria\n"
+                "6. Suggerimenti per approccio commerciale\n"
+                "7. Fonti usate\n\n"
                 f"{company_info}\n"
                 f"Nome: {contact.name}\nAzienda: {contact.company}\nRuolo: {contact.role}\n"
                 f"Sito: {contact.website}\nLinkedIn: {contact.linkedin}\n\n"
                 f"Riferimenti:\n{snippets}\n"
             )
             resp = openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="openai/gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "Sei un assistente commerciale che vende i prodotti dell'azienda proprietaria."},
+                    {"role": "system", "content": "Sei un analista commerciale che produce report sui contatti, non un venditore che scrive lettere."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.5,
-                max_tokens=600,
+                max_tokens=800,
             )
             return resp.choices[0].message.content
         except Exception as exc:
