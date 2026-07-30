@@ -699,16 +699,29 @@ def detect_social_links(text: str, results: List[Dict[str, str]]) -> Dict[str, s
 
 def enrich_contact_data(contact: Contact) -> Dict[str, Any]:
     results = []
-    if contact.company:
-        results.extend(search_web(f"{contact.company} azienda sito ufficiale contatti", max_results=5))
-    if contact.name and contact.company:
-        results.extend(search_web(f"{contact.name} {contact.company} LinkedIn", max_results=5))
-    elif contact.name:
-        results.extend(search_web(f"{contact.name} LinkedIn", max_results=3))
+    company = contact.company or ""
+    name = contact.name or ""
+    if company:
+        results.extend(search_web(f"{company} azienda sito ufficiale contatti", max_results=5))
+        results.extend(search_web(f"{company} prodotti servizi settore", max_results=5))
+        results.extend(search_web(f"{company} notizie premi eventi", max_results=4))
+        results.extend(search_web(f"{company} linkedin instagram facebook", max_results=3))
+    if name and company:
+        results.extend(search_web(f"{name} {company} LinkedIn", max_results=4))
+    elif name:
+        results.extend(search_web(f"{name} LinkedIn", max_results=4))
 
-    snippets = "\n".join(r.get("snippet", "") for r in results)
-    links = detect_social_links(snippets, results)
-    return {"results": results, "social_links": links}
+    # deduplicate by URL
+    seen = set()
+    unique = []
+    for r in results:
+        url = r.get("url", "")
+        if url and url not in seen:
+            seen.add(url)
+            unique.append(r)
+    snippets = "\n".join(r.get("snippet", "") for r in unique)
+    links = detect_social_links(snippets, unique)
+    return {"results": unique, "social_links": links}
 
 
 def score_and_tag(contact: Contact) -> (int, List[str]):
@@ -741,7 +754,7 @@ def score_and_tag(contact: Contact) -> (int, List[str]):
 def generate_report(contact: Contact, enrichment: Dict[str, Any], company: CompanyProfile) -> str:
     data = enrichment.get("results", [])
     social = enrichment.get("social_links", {})
-    snippets = "\n".join(f"- {r.get('title', '')}: {r.get('snippet', '')}" for r in data[:5])
+    snippets = "\n".join(f"- {r.get('title', '')} ({r.get('url', '')}):\n  {r.get('snippet', '')}" for r in data)
 
     company_info = (
         f"Azienda proprietaria: {company.name or 'N/D'}\n"
@@ -756,29 +769,30 @@ def generate_report(contact: Contact, enrichment: Dict[str, Any], company: Compa
     if openai_client:
         try:
             prompt = (
-                "Sei un analista commerciale. Scrivi un report di analisi in italiano sul contatto e la sua azienda. "
-                "NON scrivere una lettera di presentazione. "
-                "Organizza il testo nelle seguenti sezioni, con titoli chiari e un massimo di 300 parole totali:\n"
-                "1. Attività e settore del contatto\n"
-                "2. Prodotti o servizi principali emersi dalle fonti\n"
-                "3. Presenza online e social trovati\n"
-                "4. Dati rilevanti dal web (premi, pubblicazioni, eventi, partnership)\n"
-                "5. Perché potrebbe essere interessato ai prodotti dell'azienda proprietaria\n"
-                "6. Suggerimenti per approccio commerciale\n"
-                "7. Fonti usate\n\n"
+                "Sei un analista commerciale senior. Scrivi un report di analisi in italiano sul contatto e sulla sua azienda. "
+                "NON scrivere una lettera di presentazione. Non usare frasi di cortesia. "
+                "Organizza il testo in sezioni numerate con titoli chiari:\n\n"
+                "1. PROFILO AZIENDA DEL CONTATTO: cosa fa l'azienda del contatto, settore, dimensione (se nota), tipo di clientela.\n"
+                "2. PRODOTTI O SERVIZI DEL CONTATTO: elenca i prodotti/servizi principali che emergono dalle fonti, senza inventare.\n"
+                "3. PRESENZA ONLINE: social trovati, sito web, eventuali recensioni o canali.\n"
+                "4. DATI RILEVANTI: premi, pubblicazioni, eventi, partnership, certificazioni trovate.\n"
+                "5. ANALISI MATCH CON I PRODOTTI DELL'AZIENDA PROPRIETARIA: confronta punto per punto i prodotti della nostra azienda con le esigenze del contatto. Sii specifico: indica quali prodotti potrebbero interessare e perché.\n"
+                "6. APPROCCIO COMMERCIALE SUGGERITO: come contattarlo, che argomenti usare, eventuali obiezioni da anticipare.\n"
+                "7. FONTI: elenca le fonti principali usate.\n\n"
                 f"{company_info}\n"
-                f"Nome: {contact.name}\nAzienda: {contact.company}\nRuolo: {contact.role}\n"
+                f"Nome contatto: {contact.name}\nAzienda contatto: {contact.company}\nRuolo: {contact.role}\n"
                 f"Sito: {contact.website}\nLinkedIn: {contact.linkedin}\n\n"
-                f"Riferimenti:\n{snippets}\n"
+                f"Social trovati: {json.dumps(social, ensure_ascii=False)}\n\n"
+                f"Riferimenti web:\n{snippets}\n"
             )
             resp = openai_client.chat.completions.create(
                 model="openai/gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "Sei un analista commerciale che produce report sui contatti, non un venditore che scrive lettere."},
+                    {"role": "system", "content": "Sei un analista commerciale che produce report strutturati sui contatti. Non sei un venditore: non scrivi lettere."},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.5,
-                max_tokens=800,
+                temperature=0.4,
+                max_tokens=900,
             )
             return resp.choices[0].message.content
         except Exception as exc:
