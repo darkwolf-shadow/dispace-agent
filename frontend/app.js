@@ -30,6 +30,9 @@ const companySection = document.getElementById('company-section');
 const btnOpenCompany = document.getElementById('btn-open-company');
 const btnCloseCompany = document.getElementById('btn-close-company');
 const btnEnrichCompany = document.getElementById('btn-enrich-company');
+const notesSection = document.getElementById('notes-section');
+const noteForm = document.getElementById('note-form');
+const btnCloseNotes = document.getElementById('btn-close-notes');
 
 let currentBlob = null;
 let currentContactId = null;
@@ -267,6 +270,66 @@ async function showReport(id) {
   }
 }
 
+async function loadNotes() {
+  if (!currentContactId) return;
+  try {
+    const res = await apiFetch(`${API}/contacts/${currentContactId}/notes`);
+    if (!res.ok) throw new Error(await res.text());
+    const notes = await res.json();
+    const list = document.getElementById('notes-list');
+    if (!notes.length) {
+      list.innerHTML = '<p>Nessuna nota.</p>';
+      return;
+    }
+    list.innerHTML = notes.map(n => `
+      <div class="note-item">
+        <strong>${n.note_type}</strong> <small>${new Date(n.created_at).toLocaleString()}</small>
+        <p>${n.content || ''}</p>
+        ${n.file_path ? `<small>File: ${n.file_path.split('/').pop()}</small>` : ''}
+        <button onclick="deleteNote(${n.id})">Elimina</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.error('Errore note:', err.message);
+  }
+}
+
+async function saveNote(e) {
+  e.preventDefault();
+  if (!currentContactId) return;
+  const formData = new FormData();
+  formData.append('note_type', document.getElementById('note-type').value);
+  formData.append('content', document.getElementById('note-content').value);
+  const file = document.getElementById('note-file').files[0];
+  if (file) formData.append('file', file);
+  try {
+    const res = await apiFetch(`${API}/contacts/${currentContactId}/notes`, { method: 'POST', body: formData });
+    if (!res.ok) throw new Error(await res.text());
+    document.getElementById('note-content').value = '';
+    document.getElementById('note-file').value = '';
+    await loadNotes();
+  } catch (err) {
+    alert('Errore nota: ' + err.message);
+  }
+}
+
+window.showNotes = async function(id) {
+  currentContactId = id;
+  notesSection.style.display = 'block';
+  await loadNotes();
+};
+
+window.deleteNote = async function(noteId) {
+  if (!currentContactId || !confirm('Vuoi eliminare questa nota?')) return;
+  try {
+    const res = await apiFetch(`${API}/contacts/${currentContactId}/notes/${noteId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
+    await loadNotes();
+  } catch (err) {
+    alert('Errore eliminazione nota: ' + err.message);
+  }
+};
+
 async function loadContacts() {
   try {
     const res = await apiFetch(`${API}/contacts`);
@@ -287,6 +350,7 @@ async function loadContacts() {
           <div class="actions">
             <button onclick="enrichContact(${c.id})">Arricchisci</button>
             <button onclick="showReport(${c.id})">Report</button>
+            <button onclick="showNotes(${c.id})">Note</button>
             <button onclick="generateForContact(${c.id}, 'proposal')">Proposta</button>
             <button onclick="generateForContact(${c.id}, 'whatsapp')">WhatsApp</button>
             <button onclick="generateForContact(${c.id}, 'story')">Story</button>
@@ -427,6 +491,9 @@ if (btnEnrichCompany) btnEnrichCompany.addEventListener('click', enrichCompanyPr
 document.getElementById('btn-close-report').addEventListener('click', () => {
   document.getElementById('report-section').style.display = 'none';
 });
+
+if (noteForm) noteForm.addEventListener('submit', saveNote);
+if (btnCloseNotes) btnCloseNotes.addEventListener('click', () => { notesSection.style.display = 'none'; });
 
 const loginSection = document.getElementById('login-section');
 const mainApp = document.getElementById('main-app');

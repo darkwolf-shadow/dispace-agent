@@ -113,6 +113,17 @@ class Contact(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class ContactNote(Base):
+    __tablename__ = "contact_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contact_id = Column(Integer, nullable=False, index=True)
+    note_type = Column(String, nullable=False, default="note")  # note, call, meeting, document
+    content = Column(Text, nullable=True)
+    file_path = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class CompanyProfile(Base):
     __tablename__ = "company_profiles"
 
@@ -384,6 +395,21 @@ class GeneratedContentOut(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ContactNoteCreate(BaseModel):
+    note_type: str = "note"
+    content: Optional[str] = None
+
+
+class ContactNoteOut(ContactNoteCreate):
+    id: int
+    contact_id: int
+    file_path: Optional[str] = None
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -858,11 +884,28 @@ def score_and_tag(contact: Contact) -> (int, List[str]):
     return min(score, 100), tags
 
 
-def generate_report(contact: Contact, enrichment: Dict[str, Any], company: CompanyProfile) -> str:
+def _format_notes(notes: List[Any]) -> str:
+    if not notes:
+        return "Nessuna nota aggiuntiva."
+    lines = []
+    for n in notes:
+        ntype = getattr(n, "note_type", "note") or "note"
+        content = getattr(n, "content", "") or ""
+        file_path = getattr(n, "file_path", "") or ""
+        created = getattr(n, "created_at", "")
+        item = f"[{ntype}] {created}: {content}"
+        if file_path:
+            item += f" (file: {os.path.basename(file_path)})"
+        lines.append(item)
+    return "\n".join(lines)
+
+
+def generate_report(contact: Contact, enrichment: Dict[str, Any], company: CompanyProfile, notes: List[Any] = None) -> str:
     data = enrichment.get("results", [])
     social = enrichment.get("social_links", {})
     confidence = enrichment.get("confidence", "bassa")
     snippets = "\n".join(f"- {r.get('title', '')} ({r.get('url', '')}):\n  {r.get('snippet', '')}" for r in data)
+    notes_text = _format_notes(notes or [])
 
     company_info = (
         f"Azienda proprietaria: {company.name or 'N/D'}\n"
@@ -892,17 +935,19 @@ def generate_report(contact: Contact, enrichment: Dict[str, Any], company: Compa
                 f"{confidence_note}\n\n"
                 "Organizza il testo in sezioni numerate con titoli chiari:\n\n"
                 "1. AFFIDABILITÀ E AVVISO: ripeti il livello di affidabilità e spiega che bisogna verificare i dati se l'affidabilità è bassa.\n"
-                "2. PROFILO AZIENDA DEL CONTATTO: cosa fa l'azienda del contatto, settore, dimensione (se nota), tipo di clientela.\n"
-                "3. PRODOTTI O SERVIZI DEL CONTATTO: elenca i prodotti/servizi principali che emergono dalle fonti, senza inventare.\n"
-                "4. PRESENZA ONLINE: social trovati, sito web, eventuali recensioni o canali.\n"
-                "5. DATI RILEVANTI: premi, pubblicazioni, eventi, partnership, certificazioni trovate.\n"
-                "6. ANALISI MATCH CON I PRODOTTI DELL'AZIENDA PROPRIETARIA: confronta punto per punto i prodotti della nostra azienda con le esigenze del contatto. Sii specifico: indica quali prodotti potrebbero interessare e perché.\n"
-                "7. APPROCCIO COMMERCIALE SUGGERITO: come contattarlo, che argomenti usare, eventuali obiezioni da anticipare.\n"
-                "8. FONTI: elenca le fonti principali usate.\n\n"
+                "2. NOTE E STORIA DEL CONTATTO: riassumi eventuali appunti, contratti, telefonate o appuntamenti inseriti dall'utente. Usali per personalizzare l'approccio.\n"
+                "3. PROFILO AZIENDA DEL CONTATTO: cosa fa l'azienda del contatto, settore, dimensione (se nota), tipo di clientela.\n"
+                "4. PRODOTTI O SERVIZI DEL CONTATTO: elenca i prodotti/servizi principali che emergono dalle fonti, senza inventare.\n"
+                "5. PRESENZA ONLINE: social trovati, sito web, eventuali recensioni o canali.\n"
+                "6. DATI RILEVANTI: premi, pubblicazioni, eventi, partnership, certificazioni trovate.\n"
+                "7. ANALISI MATCH CON I PRODOTTI DELL'AZIENDA PROPRIETARIA: confronta punto per punto i prodotti della nostra azienda con le esigenze del contatto e con la storia del rapporto. Sii specifico: indica quali prodotti potrebbero interessare e perché.\n"
+                "8. APPROCCIO COMMERCIALE SUGGERITO: come contattarlo, che argomenti usare, eventuali obiezioni da anticipare.\n"
+                "9. FONTI: elenca le fonti principali usate.\n\n"
                 f"{company_info}\n"
                 f"Nome contatto: {contact.name}\nAzienda contatto: {contact.company}\nRuolo: {contact.role}\n"
                 f"Sito: {contact.website}\nLinkedIn: {contact.linkedin}\n\n"
                 f"Social trovati: {json.dumps(social, ensure_ascii=False)}\n\n"
+                f"Note e documenti del contatto:\n{notes_text}\n\n"
                 f"Riferimenti web:\n{snippets}\n"
             )
             resp = openai_client.chat.completions.create(
@@ -1133,6 +1178,36 @@ def delete_contact(contact_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@app.get("/contacts/{contact_id}/notes", response_model=List[ContactNoteOut])
+def list_contact_notes(contact_id: int, db: Session = Depends(get_db)):
+    return db.query(ContactNote).filter(ContactNote.contact_id == contact_id).order_by(ContactNote.created_at.desc()).all()
+
+
+@app.post("/contacts/{contact_id}/notes", response_model=ContactNoteOut)
+def create_contact_note(contact_id: int, note_type: str = Form("note"), content: Optional[str] = Form(None), file: Optional[UploadFile] = File(None), db: Session = Depends(get_db)):
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    file_path = None
+    if file:
+        file_path = save_upload(file)
+    note = ContactNote(contact_id=contact_id, note_type=note_type, content=content or None, file_path=file_path)
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return note
+
+
+@app.delete("/contacts/{contact_id}/notes/{note_id}")
+def delete_contact_note(contact_id: int, note_id: int, db: Session = Depends(get_db)):
+    note = db.query(ContactNote).filter(ContactNote.id == note_id, ContactNote.contact_id == contact_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    db.delete(note)
+    db.commit()
+    return {"ok": True}
+
+
 @app.post("/contacts/{contact_id}/enrich", response_model=ContactOut)
 def enrich_contact(contact_id: int, db: Session = Depends(get_db)):
     contact = db.query(Contact).filter(Contact.id == contact_id).first()
@@ -1140,10 +1215,11 @@ def enrich_contact(contact_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Contact not found")
 
     company = get_or_create_company_profile(db)
+    notes = db.query(ContactNote).filter(ContactNote.contact_id == contact_id).order_by(ContactNote.created_at.desc()).all()
     enrichment = enrich_contact_data(contact)
     contact.source_links = enrichment.get("results", [])
     contact.social_links = enrichment.get("social_links", {})
-    contact.report = generate_report(contact, enrichment, company)
+    contact.report = generate_report(contact, enrichment, company, notes)
     contact.score, contact.tags = score_and_tag(contact)
     contact.enriched_at = datetime.utcnow()
     db.commit()

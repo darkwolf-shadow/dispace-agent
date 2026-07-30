@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>DiSpace Lead Capture</title>
-  <link rel="stylesheet" href="style.css?v=25">
+  <link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
   <header>
@@ -77,6 +77,24 @@
       </div>
     </section>
 
+    <section id="notes-section" style="display:none;">
+      <h2>Note e documenti del contatto</h2>
+      <div id="notes-list"></div>
+      <form id="note-form">
+        <label>Tipo
+          <select id="note-type">
+            <option value="note">Nota / appunto</option>
+            <option value="call">Telefonata</option>
+            <option value="meeting">Appuntamento</option>
+            <option value="document">Contratto / documento</option>
+          </select>
+        </label>
+        <label>Testo <textarea id="note-content" rows="3" placeholder="Scrivi qui appunti, accordi, verbali..."></textarea></label>
+        <label>Allega file (opzionale) <input type="file" id="note-file"></label>
+        <div class="controls"><button type="submit">Aggiungi nota</button> <button type="button" id="btn-close-notes">Chiudi</button></div>
+      </form>
+    </section>
+
     <section id="company-section" class="modal" style="display:none;">
       <div class="modal-content">
         <div class="modal-header">
@@ -120,7 +138,7 @@
     </section>
   </main>
 
-  <script src="app.js?v=25"></script>
+  <script src="app.js?v=26"></script>
   <script>
     // Accesso libero: mostra subito l'app
     (function() {
