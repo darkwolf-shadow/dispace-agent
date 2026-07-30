@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>DiSpace Lead Capture</title>
-  <link rel="stylesheet" href="style.css?v=29">
+  <link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
   <header>
@@ -139,12 +139,33 @@
         <img id="social-image-preview" style="max-width:100%; border-radius:8px; display:none;">
         <label>Didascalia <textarea id="social-caption" rows="4"></textarea></label>
         <label>Hashtag <input type="text" id="social-hashtags"></label>
+        <label>Credenziale
+          <select id="social-credential"></select>
+        </label>
         <div class="controls">
           <button id="btn-save-social">Salva bozza</button>
           <button id="btn-approve-social">Approva</button>
+          <button id="btn-publish-social">Pubblica</button>
           <button id="btn-cancel-social">Annulla</button>
         </div>
       </div>
+      <h3>Credenziali social</h3>
+      <form id="credential-form">
+        <label>Piattaforma
+          <select id="cred-platform">
+            <option value="telegram">Telegram</option>
+            <option value="facebook">Facebook Page</option>
+            <option value="instagram">Instagram</option>
+            <option value="whatsapp">WhatsApp Business</option>
+            <option value="linkedin">LinkedIn</option>
+          </select>
+        </label>
+        <label>Etichetta <input type="text" id="cred-label" placeholder="Canale aziendale"></label>
+        <label>Token/Password <input type="text" id="cred-token" placeholder="access token o bot token"></label>
+        <label>Extra JSON <textarea id="cred-extra" rows="2" placeholder='{"chat_id":"@mio_canale"} o {"page_id":"123"}'></textarea></label>
+        <div class="controls"><button type="submit">Salva credenziale</button></div>
+      </form>
+      <ul id="credentials-list"></ul>
       <h3>Proposte salvate</h3>
       <ul id="social-posts-list"></ul>
       <div class="controls"><button id="btn-refresh-social">Aggiorna</button></div>
@@ -168,7 +189,7 @@
     </section>
   </main>
 
-  <script src="app.js?v=29"></script>
+  <script src="app.js?v=30"></script>
   <script>
     // Accesso libero: mostra subito l'app
     (function() {

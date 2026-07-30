@@ -43,9 +43,17 @@ const socialCaption = document.getElementById('social-caption');
 const socialHashtags = document.getElementById('social-hashtags');
 const btnSaveSocial = document.getElementById('btn-save-social');
 const btnApproveSocial = document.getElementById('btn-approve-social');
+const btnPublishSocial = document.getElementById('btn-publish-social');
 const btnCancelSocial = document.getElementById('btn-cancel-social');
 const btnRefreshSocial = document.getElementById('btn-refresh-social');
+const socialCredentialSelect = document.getElementById('social-credential');
 const socialPostsList = document.getElementById('social-posts-list');
+const credentialForm = document.getElementById('credential-form');
+const credPlatform = document.getElementById('cred-platform');
+const credLabel = document.getElementById('cred-label');
+const credToken = document.getElementById('cred-token');
+const credExtra = document.getElementById('cred-extra');
+const credentialsList = document.getElementById('credentials-list');
 
 let currentBlob = null;
 let currentContactId = null;
@@ -471,6 +479,80 @@ async function loadGeneratedContents() {
   }
 }
 
+let socialCredentials = [];
+
+async function loadSocialCredentials() {
+  try {
+    const res = await apiFetch(`${API}/social-credentials`);
+    if (!res.ok) throw new Error(await res.text());
+    socialCredentials = await res.json();
+    credentialsList.innerHTML = socialCredentials.map(c => `
+      <li><strong>${c.platform}</strong> ${c.label || ''} <small>${c.extra || ''}</small>
+        <button class="btn-danger" onclick="deleteCredential(${c.id})">Elimina</button>
+      </li>
+    `).join('');
+    populateCredentialSelect();
+  } catch (err) {
+    credentialsList.innerHTML = `<li>Errore: ${err.message}</li>`;
+  }
+}
+
+function populateCredentialSelect() {
+  if (!socialCredentialSelect) return;
+  const platform = socialPlatform.value;
+  socialCredentialSelect.innerHTML = socialCredentials
+    .filter(c => c.platform === platform)
+    .map(c => `<option value="${c.id}">${c.label || c.platform} ${c.extra || ''}</option>`)
+    .join('');
+}
+
+window.deleteCredential = async function(id) {
+  if (!confirm('Eliminare credenziale?')) return;
+  try {
+    const res = await apiFetch(`${API}/social-credentials/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
+    await loadSocialCredentials();
+  } catch (err) { alert('Errore: ' + err.message); }
+};
+
+async function saveCredential(e) {
+  e.preventDefault();
+  const data = {
+    platform: credPlatform.value,
+    label: credLabel.value,
+    access_token: credToken.value,
+    extra: credExtra.value,
+  };
+  try {
+    const res = await apiFetch(`${API}/social-credentials`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    credentialForm.reset();
+    await loadSocialCredentials();
+  } catch (err) { alert('Errore credenziale: ' + err.message); }
+}
+
+async function publishSocialPost() {
+  if (!currentSocialPostId) return;
+  const credentialId = socialCredentialSelect.value;
+  if (!credentialId) { alert('Seleziona una credenziale social'); return; }
+  try {
+    await saveSocialPost();
+    const res = await apiFetch(`${API}/social-posts/${currentSocialPostId}/publish?credential_id=${credentialId}`, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    alert('Pubblicato! Risposta: ' + JSON.stringify(data.result));
+    await loadSocialPosts();
+  } catch (err) {
+    alert('Errore pubblicazione: ' + err.message);
+  }
+}
+
+if (socialPlatform) socialPlatform.addEventListener('change', populateCredentialSelect);
+
 async function generateSocialPost(e) {
   e.preventDefault();
   const file = socialFile.files[0];
@@ -632,8 +714,10 @@ if (btnCloseNotes) btnCloseNotes.addEventListener('click', () => { notesSection.
 if (socialForm) socialForm.addEventListener('submit', generateSocialPost);
 if (btnSaveSocial) btnSaveSocial.addEventListener('click', saveSocialPost);
 if (btnApproveSocial) btnApproveSocial.addEventListener('click', approveSocialPost);
+if (btnPublishSocial) btnPublishSocial.addEventListener('click', publishSocialPost);
 if (btnCancelSocial) btnCancelSocial.addEventListener('click', resetSocialForm);
 if (btnRefreshSocial) btnRefreshSocial.addEventListener('click', loadSocialPosts);
+if (credentialForm) credentialForm.addEventListener('submit', saveCredential);
 
 const loginSection = document.getElementById('login-section');
 const mainApp = document.getElementById('main-app');
@@ -679,6 +763,7 @@ function showApp() {
   loadCompanyProfile();
   loadConfig();
   loadSocialPosts();
+  loadSocialCredentials();
 }
 
 async function doLogin() {

@@ -194,13 +194,36 @@ class SocialPost(Base):
     id = Column(Integer, primary_key=True, index=True)
     media_path = Column(String, nullable=True)  # photo or video
     media_type = Column(String, default="image")  # image, video
-    platform = Column(String, nullable=False, default="instagram")  # instagram, facebook, whatsapp, linkedin
+    platform = Column(String, nullable=False, default="instagram")  # instagram, facebook, whatsapp, linkedin, telegram
     caption = Column(Text, nullable=True)
     hashtags = Column(String, nullable=True)
     status = Column(String, default="draft")  # draft, approved, scheduled, published
     scheduled_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SocialCredential(Base):
+    __tablename__ = "social_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    platform = Column(String, nullable=False)  # facebook, instagram, whatsapp, telegram, linkedin
+    label = Column(String, nullable=True)
+    access_token = Column(Text, nullable=False)
+    extra = Column(JSONString, nullable=True)  # page_id, chat_id, etc.
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SocialPublishLog(Base):
+    __tablename__ = "social_publish_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    social_post_id = Column(Integer, nullable=False, index=True)
+    platform = Column(String, nullable=False)
+    status = Column(String, nullable=False)  # success, error
+    message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 Base.metadata.create_all(bind=engine)
@@ -452,6 +475,34 @@ class SocialPostOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SocialCredentialCreate(BaseModel):
+    platform: str
+    label: Optional[str] = None
+    access_token: str
+    extra: Optional[str] = None
+
+
+class SocialCredentialOut(BaseModel):
+    id: int
+    platform: str
+    label: Optional[str] = None
+    extra: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+    @field_validator('extra', mode='before')
+    @classmethod
+    def dump_extra(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return json.dumps(v)
+        return v
 
 
 app = FastAPI(title="DiSpace Lead Capture API", version="0.3.0")
@@ -1669,6 +1720,146 @@ def delete_social_post(post_id: int, db: Session = Depends(get_db)):
     db.delete(post)
     db.commit()
     return {"ok": True}
+
+
+# -------------------- Social Credentials & Publishing --------------------
+
+
+@app.post("/social-credentials", response_model=SocialCredentialOut)
+def create_social_credential(payload: SocialCredentialCreate, db: Session = Depends(get_db)):
+    extra = None
+    if payload.extra:
+        try:
+            extra_dict = json.loads(payload.extra)
+            extra = json.dumps(extra_dict)
+        except Exception:
+            extra = payload.extra
+    cred = SocialCredential(
+        platform=payload.platform,
+        label=payload.label,
+        access_token=payload.access_token,
+        extra=extra,
+    )
+    db.add(cred)
+    db.commit()
+    db.refresh(cred)
+    return cred
+
+
+@app.get("/social-credentials", response_model=List[SocialCredentialOut])
+def list_social_credentials(platform: Optional[str] = None, db: Session = Depends(get_db)):
+    q = db.query(SocialCredential)
+    if platform:
+        q = q.filter(SocialCredential.platform == platform)
+    return q.order_by(SocialCredential.created_at.desc()).all()
+
+
+@app.delete("/social-credentials/{cred_id}")
+def delete_social_credential(cred_id: int, db: Session = Depends(get_db)):
+    cred = db.query(SocialCredential).filter(SocialCredential.id == cred_id).first()
+    if not cred:
+        raise HTTPException(status_code=404, detail="Credential not found")
+    db.delete(cred)
+    db.commit()
+    return {"ok": True}
+
+
+def _publish_telegram(cred: SocialCredential, text: str, media_path: Optional[str]) -> Dict[str, Any]:
+    extra = json.loads(cred.extra or "{}")
+    chat_id = extra.get("chat_id")
+    if not chat_id:
+        raise ValueError("chat_id mancante nelle credenziali Telegram")
+    token = cred.access_token
+    if media_path and os.path.exists(media_path):
+        url = f"https://api.telegram.org/bot{token}/sendPhoto"
+        with open(media_path, "rb") as f:
+            files = {"photo": f}
+            data = {"chat_id": chat_id, "caption": text, "parse_mode": "HTML"}
+            r = requests.post(url, data=data, files=files, timeout=30)
+    else:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        data = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+        r = requests.post(url, json=data, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+
+def _publish_facebook(cred: SocialCredential, text: str, media_path: Optional[str]) -> Dict[str, Any]:
+    extra = json.loads(cred.extra or "{}")
+    page_id = extra.get("page_id")
+    if not page_id:
+        raise ValueError("page_id mancante nelle credenziali Facebook")
+    token = cred.access_token
+    url = f"https://graph.facebook.com/v18.0/{page_id}/feed"
+    if media_path and os.path.exists(media_path):
+        with open(media_path, "rb") as f:
+            files = {"file": f}
+            data = {"message": text, "access_token": token}
+            r = requests.post(url, data=data, files=files, timeout=30)
+    else:
+        data = {"message": text, "access_token": token}
+        r = requests.post(url, data=data, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+
+def _publish_whatsapp(cred: SocialCredential, text: str) -> Dict[str, Any]:
+    extra = json.loads(cred.extra or "{}")
+    phone_number_id = extra.get("phone_number_id")
+    to = extra.get("to")
+    if not phone_number_id or not to:
+        raise ValueError("phone_number_id o to mancanti nelle credenziali WhatsApp")
+    token = cred.access_token
+    url = f"https://graph.facebook.com/v18.0/{phone_number_id}/messages"
+    data = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "text",
+        "text": {"body": text},
+    }
+    r = requests.post(url, json=data, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+
+@app.post("/social-posts/{post_id}/publish")
+def publish_social_post(post_id: int, credential_id: Optional[int] = None, db: Session = Depends(get_db)):
+    post = db.query(SocialPost).filter(SocialPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if not post.caption:
+        raise HTTPException(status_code=400, detail="Nessuna didascalia da pubblicare")
+
+    q = db.query(SocialCredential).filter(SocialCredential.platform == post.platform)
+    if credential_id:
+        q = q.filter(SocialCredential.id == credential_id)
+    cred = q.first()
+    if not cred:
+        raise HTTPException(status_code=400, detail=f"Nessuna credenziale salvata per {post.platform}")
+
+    text = f"{post.caption}\n\n{post.hashtags or ''}".strip()
+    try:
+        if post.platform == "telegram":
+            result = _publish_telegram(cred, text, post.media_path)
+        elif post.platform in ("facebook", "instagram"):
+            result = _publish_facebook(cred, text, post.media_path)
+        elif post.platform == "whatsapp":
+            result = _publish_whatsapp(cred, text)
+        else:
+            raise ValueError(f"Piattaforma {post.platform} non supportata per la pubblicazione automatica")
+        post.status = "published"
+        status = "success"
+        message = json.dumps(result)
+    except Exception as exc:
+        status = "error"
+        message = str(exc)
+    post.updated_at = datetime.utcnow()
+    db.add(SocialPublishLog(social_post_id=post.id, platform=post.platform, status=status, message=message))
+    db.commit()
+    db.refresh(post)
+    if status == "error":
+        raise HTTPException(status_code=500, detail=message)
+    return {"ok": True, "post": SocialPostOut.from_orm(post), "result": json.loads(message)}
 
 
 @app.get("/health")
