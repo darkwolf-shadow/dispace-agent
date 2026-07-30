@@ -1031,11 +1031,11 @@ def get_or_create_company_profile(db: Session) -> CompanyProfile:
 @app.get("/config")
 def get_config():
     plan = settings.plan.lower()
-    features = ["capture", "export", "notes"]
+    features = ["capture", "export", "notes", "enrich", "report"]
     if plan in ("pro", "premium"):
-        features.extend(["enrich", "report", "proposal", "whatsapp", "story", "email", "company_profile"])
+        features.extend(["proposal", "whatsapp", "story", "email", "company_profile"])
     if plan == "premium":
-        features.extend(["campaigns", "social_scheduler", "analytics"])
+        features.extend(["campaigns", "ads_calculator", "social_scheduler", "analytics"])
     return {
         "app_title": settings.app_title,
         "owner_name": settings.owner_name,

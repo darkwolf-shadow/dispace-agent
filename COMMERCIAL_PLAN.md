@@ -2,94 +2,80 @@
 
 ## Visione
 
-Un'unica piattaforma modulare per aziende che partecipano a fiere, eventi e manifestazioni. Ogni cliente può attivare uno, due o tre moduli in base alle esigenze, con upgrade semplice che non richiede cambiare applicazione.
+Un'unica piattaforma modulare che accompagna l'azienda dalla fiera al cliente finale. Ogni cliente può attivare uno, due o tre piani in base alle esigenze. L'upgrade è istantaneo e non richiede di cambiare applicazione.
 
-## Architettura modulare
+## I tre piani
 
-| Modulo | Nome piano | Descrizione |
-|--------|-----------|-------------|
-| 1 | **Base - Lead Capture** | Cattura contatti da biglietti da visita, volantini e brochure con OCR + AI. Archivio contatti, export, note base. |
-| 2 | **Pro - Marketing & Proposte** | Arricchimento contatti, report commerciali, proposte WhatsApp/email/story, note e documenti. |
-| 3 | **Premium - Campagne & Social** | Campagne multicanale automatiche, social scheduler, analytics, dashboard commerciale. |
+### Piano Base — Lead Capture + Report
 
-## Cosa può fare ogni livello
+Scopo: capire chi è il cliente che hai davanti.
 
-### Livello 1 - Base (Lead Capture)
-
-- Scatta o carica biglietti da visita e volantini dal telefono.
+- Scatta o carica biglietti da visita, volantini e brochure dal telefono.
 - Estrazione dati con OCR + intelligenza artificiale.
-- Archivio contatti permanente con ricerca.
-- Campi principali: nome, azienda, ruolo, email, telefono, sito, indirizzo, LinkedIn.
-- Note base per ogni contatto.
-- Esporta contatti in JSON/CSV.
-- Multisede: ogni cliente ha la propria istanza isolata.
+- Arricchimento tramite ricerca web (Tavily, Brave, Serper, Bing).
+- Report commerciale strutturato: profilo azienda, prodotti, social, fonti.
+- Archivio contatti permanente con ricerca ed export JSON/CSV.
+- Note per ogni contatto.
 
-### Livello 2 - Pro (Marketing Automation)
+**Questo è il nucleo fondamentale**: senza report non c'è valore.
 
-Tutto il livello Base più:
+### Piano Pro — Proposte commerciali per il singolo cliente
 
-- Arricchimento contatti tramite ricerca web (Tavily, Brave, Serper, Bing).
-- Report commerciale strutturato con profilo azienda, prodotti, presenza online, fonti.
+Scopo: trasformare il report in azione verso quel cliente specifico.
+
+Tutto il piano Base più:
+
 - Profilo "La mia azienda" con descrizione, prodotti, valori, target e tono.
-- Generazione proposte commerciali: email, WhatsApp, social story.
-- Note e documenti per ogni contatto (appuntamenti, telefonate, contratti).
-- L'IA usa note e profilo azienda per personalizzare report e proposte.
+- Generazione proposte commerciali personalizzate per il singolo contatto:
+  - messaggio WhatsApp;
+  - email commerciale;
+  - proposta formale da presentare;
+  - story/post social relativo al cliente.
+- L'IA usa il profilo aziendale + le note per personalizzare le proposte.
 
-### Livello 3 - Premium (Campagne & Social Hub)
+### Piano Premium — Campagne di marketing per l'azienda
 
-Tutto il livello Pro più:
+Scopo: fare marketing per l'azienda che usa l'app, non solo per i singoli contatti.
 
-- Campagne marketing multicanale: seleziona contatti per tag/score e genera contenuti in blocco.
-- Invio email tramite integrazione con servizi SMTP/send API.
-- Pianificazione post/story per social (Instagram, Facebook, LinkedIn) con anteprima.
-- Analytics: aperture, click, risposte, conversioni.
-- Dashboard commerciale con pipeline e task di follow-up.
-- Integrazione con CRM esterni (HubSpot, Pipedrive, Zoho) tramite webhook/API.
+Tutto il piano Pro più:
 
-## Attivazione dei moduli
+- Analisi del target ideale dell'azienda proprietaria.
+- Campagne pubblicitarie per l'azienda, basate sui contatti in archivio e sui prodotti.
+- Generazione di contenuti multipli: post, story, annunci, email di campagna.
+- Stima del budget pubblicitario reale per canale (Google, Meta, LinkedIn, ecc.).
+- Calcolo CPC/CPM/CPA stimato in base al settore e alla località.
+- Pianificazione e pubblicazione sui social (dove le API lo permettono).
+- Analytics di campagna.
 
-Ogni istanza Railway può essere configurata con variabili d'ambiente che abilitano i piani:
+Il Premium non paga la pubblicità al posto del cliente: la progetta e calcola quanto costa, poi il cliente decide il budget.
+
+## Attivazione dei piani
+
+Ogni istanza Railway può essere configurata con la variabile d'ambiente `PLAN`:
 
 ```env
-PLAN=base        # abilita solo Lead Capture
-PLAN=pro         # abilita Lead Capture + Marketing
-PLAN=premium     # abilita tutto
+PLAN=base        # lead capture + report
+PLAN=pro         # + proposte commerciali per singolo cliente
+PLAN=premium     # + campagne marketing per l'azienda
 ```
 
-I moduli sono indipendenti:
+L'app nasconde automaticamente i pulsanti e le sezioni non inclusi nel piano attivo. I dati e il profilo azienda restano sempre salvati.
 
-- Un cliente può partire con `base`, poi passare a `pro` senza reinstallare.
-- Un cliente può attivare `premium` da subito se ha bisogno di campagne e social.
-- Per vendere separatamente, si creano istanze con `PLAN` diverso.
+## Prezzi abbonamento consigliati
 
-## Prezzi indicativi mensili
+| Piano | Prezzo mensile | Destinatari |
+|-------|----------------|-------------|
+| Base | 29 € | Piccole aziende, singole fiere |
+| Pro | 59 € | Aziende B2B con vendita diretta |
+| Premium | 149 € + budget ads | Aziende con team marketing e budget pubblicitario |
 
-| Piano | Prezzo | Destinatari |
-|-------|--------|-------------|
-| Base | 29 €/mese | Piccole aziende, singole fiere |
-| Pro | 79 €/mese | Aziende con vendita B2B e network costante |
-| Premium | 199 €/mese | Aziende con team marketing e social attivo |
+## Costi di funzionamento
 
-I prezzi sono indicativi. Ogni piano include un numero di contatti e di generazioni AI; oltre si aggiungono crediti.
-
-## Proposta commerciale
-
-DiSpace viene presentata come **un'unica piattaforma crescente**:
-
-- Ogni cliente vede solo le funzioni del piano attivato.
-- L'upgrade è istantaneo: basta cambiare `PLAN` nel pannello Railway.
-- Non serve cambiare URL, account o dati: il contatto e l'azienda restano gli stessi.
-- L'upsell è naturale: chi inizia con la cattura contatti può aggiungere le proposte commerciali e poi le campagne.
+Vedi `COST_ANALYSIS.md` per il dettaglio dei costi reali di IA, ricerca web e hosting per ogni piano.
 
 ## Prossimi passi tecnici
 
-1. Aggiungere la variabile `PLAN` nel backend e nel frontend.
-2. Nascondere i pulsanti e gli endpoint non inclusi nel piano attivo.
-3. Creare il modulo Premium con campagne multicanale e social scheduler.
-4. Aggiungere una pagina di impostazioni del piano per ogni cliente.
-
-## Note
-
-- Ogni cliente ha una propria istanza Railway isolata.
-- Il modello "un'istanza per cliente" mantiene dati separati e semplifica la fatturazione.
-- In futuro si può valutare un'architettura multi-tenant se il numero di clienti cresce molto.
+1. Confermare i tre piani e i prezzi.
+2. Implementare il calcolatore di budget pubblicitario nel Premium.
+3. Aggiungere le API di pubblicazione sui social dove possibile.
+4. Creare una dashboard con analytics e ROI stimato.
