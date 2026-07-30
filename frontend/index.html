@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>DiSpace Lead Capture</title>
-  <link rel="stylesheet" href="style.css?v=15">
+  <link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
   <header>
@@ -75,6 +75,24 @@
       </div>
     </section>
 
+    <section id="company-section">
+      <h2>La mia azienda</h2>
+      <form id="company-form">
+        <label>Nome azienda <input type="text" id="cp-name" name="name"></label>
+        <label>Descrizione <textarea id="cp-description" name="description" rows="3" placeholder="Cosa fa l'azienda"></textarea></label>
+        <label>Prodotti <textarea id="cp-products" name="products" rows="2" placeholder="Elenca i prodotti principali"></textarea></label>
+        <label>Servizi <textarea id="cp-services" name="services" rows="2" placeholder="Servizi offerti"></textarea></label>
+        <label>Valori <textarea id="cp-values" name="values" rows="2" placeholder="Valori dell'azienda"></textarea></label>
+        <label>Target <textarea id="cp-target" name="target" rows="2" placeholder="Tipologia di clienti ideali"></textarea></label>
+        <label>Tono comunicazione <input type="text" id="cp-tone" name="tone" placeholder="professionale e cordiale / informale / elegante"></label>
+        <label>Sito <input type="text" id="cp-website" name="website"></label>
+        <label>Email <input type="text" id="cp-email" name="email"></label>
+        <label>Telefono <input type="tel" id="cp-phone" name="phone"></label>
+        <label>Indirizzo <input type="text" id="cp-address" name="address"></label>
+        <div class="controls"><button type="submit">Salva profilo azienda</button></div>
+      </form>
+    </section>
+
     <section id="marketing-section">
       <h2>Contenuti generati</h2>
       <p class="hint">Scegli un contatto dalla lista e premi Proposta, WhatsApp, Story o Email.</p>
@@ -93,7 +111,7 @@
     </section>
   </main>
 
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
   <script>
     // Accesso libero: mostra subito l'app
     (function() {

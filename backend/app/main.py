@@ -108,6 +108,26 @@ class Contact(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class CompanyProfile(Base):
+    __tablename__ = "company_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    products = Column(Text, nullable=True)
+    services = Column(Text, nullable=True)
+    values = Column("company_values", Text, nullable=True)
+    target = Column(Text, nullable=True)
+    channels = Column(Text, nullable=True)
+    website = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    tone = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Template(Base):
     __tablename__ = "templates"
 
@@ -157,6 +177,31 @@ Base.metadata.create_all(bind=engine)
 try:
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE contacts ADD COLUMN extra TEXT"))
+except Exception:
+    pass
+
+# Create company_profiles table if missing
+try:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS company_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR,
+                description TEXT,
+                products TEXT,
+                services TEXT,
+                company_values TEXT,
+                target TEXT,
+                channels TEXT,
+                website VARCHAR,
+                email VARCHAR,
+                phone VARCHAR,
+                address VARCHAR,
+                tone VARCHAR,
+                created_at DATETIME,
+                updated_at DATETIME
+            )
+        """))
 except Exception:
     pass
 
@@ -257,6 +302,30 @@ class ContactOut(ContactUpdate):
 class ReportOut(BaseModel):
     contact_id: int
     report: Optional[str] = None
+
+
+class CompanyProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    products: Optional[str] = None
+    services: Optional[str] = None
+    values: Optional[str] = None
+    target: Optional[str] = None
+    channels: Optional[str] = None
+    website: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    tone: Optional[str] = None
+
+
+class CompanyProfileOut(CompanyProfileUpdate):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class TemplateCreate(BaseModel):
@@ -667,16 +736,29 @@ def score_and_tag(contact: Contact) -> (int, List[str]):
     return min(score, 100), tags
 
 
-def generate_report(contact: Contact, enrichment: Dict[str, Any]) -> str:
+def generate_report(contact: Contact, enrichment: Dict[str, Any], company: CompanyProfile) -> str:
     data = enrichment.get("results", [])
     social = enrichment.get("social_links", {})
     snippets = "\n".join(f"- {r.get('title', '')}: {r.get('snippet', '')}" for r in data[:5])
 
+    company_info = (
+        f"Azienda proprietaria: {company.name or 'N/D'}\n"
+        f"Descrizione: {company.description or 'N/D'}\n"
+        f"Prodotti: {company.products or 'N/D'}\n"
+        f"Servizi: {company.services or 'N/D'}\n"
+        f"Valori: {company.values or 'N/D'}\n"
+        f"Target: {company.target or 'N/D'}\n"
+        f"Tono: {company.tone or 'professionale e cordiale'}\n"
+    )
+
     if openai_client:
         try:
             prompt = (
-                "Genera un report sintetico in italiano per il seguente contatto, "
-                "basandoti sui riferimenti web trovati. Massimo 300 parole.\n\n"
+                "Sei un consulente commerciale per l'azienda descritta sopra. "
+                "Genera un report sintetico in italiano sul contatto, evidenziando come "
+                "i prodotti/servizi dell'azienda possono interessare questo contatto. "
+                "Massimo 300 parole.\n\n"
+                f"{company_info}\n"
                 f"Nome: {contact.name}\nAzienda: {contact.company}\nRuolo: {contact.role}\n"
                 f"Sito: {contact.website}\nLinkedIn: {contact.linkedin}\n\n"
                 f"Riferimenti:\n{snippets}\n"
@@ -684,7 +766,7 @@ def generate_report(contact: Contact, enrichment: Dict[str, Any]) -> str:
             resp = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "Sei un assistente di vendita B2B."},
+                    {"role": "system", "content": "Sei un assistente commerciale che vende i prodotti dell'azienda proprietaria."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.5,
@@ -746,6 +828,32 @@ def upload_business_card(files: List[UploadFile] = File(...), db: Session = Depe
     db.commit()
     db.refresh(contact)
     return contact
+
+
+def get_or_create_company_profile(db: Session) -> CompanyProfile:
+    profile = db.query(CompanyProfile).first()
+    if not profile:
+        profile = CompanyProfile()
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
+    return profile
+
+
+@app.get("/company-profile", response_model=CompanyProfileOut)
+def read_company_profile(db: Session = Depends(get_db)):
+    return get_or_create_company_profile(db)
+
+
+@app.put("/company-profile", response_model=CompanyProfileOut)
+def update_company_profile(payload: CompanyProfileUpdate, db: Session = Depends(get_db)):
+    profile = get_or_create_company_profile(db)
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(profile, key, value)
+    profile.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    return profile
 
 
 @app.post("/contacts", response_model=ContactOut)
@@ -817,10 +925,11 @@ def enrich_contact(contact_id: int, db: Session = Depends(get_db)):
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
 
+    company = get_or_create_company_profile(db)
     enrichment = enrich_contact_data(contact)
     contact.source_links = enrichment.get("results", [])
     contact.social_links = enrichment.get("social_links", {})
-    contact.report = generate_report(contact, enrichment)
+    contact.report = generate_report(contact, enrichment, company)
     contact.score, contact.tags = score_and_tag(contact)
     contact.enriched_at = datetime.utcnow()
     db.commit()
@@ -894,17 +1003,28 @@ def generate_with_llm(prompt: str, max_tokens: int = 800) -> str:
         return ""
 
 
-def generate_content(contact: Contact, template: Template, kind: str, channel: Optional[str] = None) -> Dict[str, Any]:
+def generate_content(contact: Contact, template: Template, kind: str, company: CompanyProfile, channel: Optional[str] = None) -> Dict[str, Any]:
     channel = channel or template.channel or "generic"
     base_body = apply_template(template.body, contact)
     subject = apply_template(template.subject or "", contact) if template.subject else None
 
     if openai_client:
+        company_info = (
+            f"Azienda proprietaria: {company.name or 'N/D'}\n"
+            f"Descrizione: {company.description or 'N/D'}\n"
+            f"Prodotti: {company.products or 'N/D'}\n"
+            f"Servizi: {company.services or 'N/D'}\n"
+            f"Valori: {company.values or 'N/D'}\n"
+            f"Target: {company.target or 'N/D'}\n"
+            f"Tono: {company.tone or 'professionale e cordiale'}\n"
+        )
         prompt = (
+            f"{company_info}\n"
             f"Tipo: {kind}\nCanale: {channel}\n"
             f"Destinatario: {contact.name} ({contact.role}) presso {contact.company}\n"
-            f"Istruzioni: usa il testo seguente come base, miglioralo e personalizzalo per il destinatario. "
-            f"Mantieni tono professionale e conciso.\n\nTesto base:\n{base_body}\n"
+            f"Istruzioni: sei un commerciale dell'azienda proprietaria. Usa il testo seguente come base, "
+            f"miglioralo e personalizzalo per il destinatario, promuovendo i prodotti/servizi dell'azienda proprietaria. "
+            f"Mantieni il tono indicato.\n\nTesto base:\n{base_body}\n"
         )
         generated = generate_with_llm(prompt)
         if generated:
@@ -1000,7 +1120,8 @@ def generate_for_contact(
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    result = generate_content(contact, template, kind, channel)
+    company = get_or_create_company_profile(db)
+    result = generate_content(contact, template, kind, company, channel)
     content = GeneratedContent(
         contact_id=contact.id,
         kind=result["kind"],

@@ -25,6 +25,7 @@ const campaignForm = document.getElementById('campaign-form');
 const campaignsList = document.getElementById('campaigns-list');
 const contentsList = document.getElementById('contents-list');
 const btnRefreshContents = document.getElementById('btn-refresh-contents');
+const companyForm = document.getElementById('company-form');
 
 let currentBlob = null;
 let currentContactId = null;
@@ -188,6 +189,40 @@ async function enrichContact(id) {
   } catch (err) {
     document.getElementById('report-text').textContent = 'Errore enrichment: ' + err.message;
     alert('Errore enrichment: ' + err.message);
+  }
+}
+
+async function loadCompanyProfile() {
+  try {
+    const res = await apiFetch(`${API}/company-profile`);
+    if (!res.ok) throw new Error(await res.text());
+    const profile = await res.json();
+    for (const key of ['name', 'description', 'products', 'services', 'values', 'target', 'channels', 'website', 'email', 'phone', 'address', 'tone']) {
+      const el = document.getElementById(`cp-${key}`);
+      if (el) el.value = profile[key] || '';
+    }
+  } catch (err) {
+    console.error('Errore caricamento profilo azienda:', err.message);
+  }
+}
+
+async function saveCompanyProfile(e) {
+  e.preventDefault();
+  const data = {};
+  for (const key of ['name', 'description', 'products', 'services', 'values', 'target', 'channels', 'website', 'email', 'phone', 'address', 'tone']) {
+    const el = document.getElementById(`cp-${key}`);
+    if (el) data[key] = el.value.trim() || null;
+  }
+  try {
+    const res = await apiFetch(`${API}/company-profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    alert('Profilo azienda salvato');
+  } catch (err) {
+    alert('Errore salvataggio profilo: ' + err.message);
   }
 }
 
@@ -355,6 +390,7 @@ document.getElementById('btn-export-json').addEventListener('click', () => {
 document.getElementById('btn-export-csv').addEventListener('click', () => {
   window.location.href = `${API}/contacts/export?format=csv`;
 });
+if (companyForm) companyForm.addEventListener('submit', saveCompanyProfile);
 
 document.getElementById('btn-close-report').addEventListener('click', () => {
   document.getElementById('report-section').style.display = 'none';
@@ -370,6 +406,7 @@ function showApp() {
   if (mainApp) mainApp.style.display = 'block';
   loadContacts();
   loadGeneratedContents();
+  loadCompanyProfile();
 }
 
 async function doLogin() {
