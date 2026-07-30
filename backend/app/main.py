@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     tavily_api_key: Optional[str] = None
     clearbit_api_key: Optional[str] = None
     uploads_dir: str = "/app/data/uploads"
+    app_title: str = "DiSpace Lead Capture"
+    owner_name: str = ""
 
     class Config:
         env_file = ".env"
@@ -838,6 +840,11 @@ def get_or_create_company_profile(db: Session) -> CompanyProfile:
         db.commit()
         db.refresh(profile)
     return profile
+
+
+@app.get("/config")
+def get_config():
+    return {"app_title": settings.app_title, "owner_name": settings.owner_name, "disable_auth": settings.disable_auth}
 
 
 @app.get("/company-profile", response_model=CompanyProfileOut)

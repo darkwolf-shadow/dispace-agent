@@ -401,12 +401,27 @@ const mainApp = document.getElementById('main-app');
 const btnLogin = document.getElementById('btn-login');
 const loginError = document.getElementById('login-error');
 
+async function loadConfig() {
+  try {
+    const res = await apiFetch(`${API}/config`);
+    if (!res.ok) return;
+    const cfg = await res.json();
+    const titleEl = document.querySelector('header h1');
+    if (titleEl && cfg.app_title) titleEl.textContent = cfg.app_title;
+    const ownerEl = document.getElementById('owner-name');
+    if (ownerEl && cfg.owner_name) ownerEl.textContent = cfg.owner_name;
+  } catch (err) {
+    console.error('Config error:', err.message);
+  }
+}
+
 function showApp() {
   if (loginSection) loginSection.style.display = 'none';
   if (mainApp) mainApp.style.display = 'block';
   loadContacts();
   loadGeneratedContents();
   loadCompanyProfile();
+  loadConfig();
 }
 
 async function doLogin() {
