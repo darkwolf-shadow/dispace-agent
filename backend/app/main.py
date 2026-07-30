@@ -188,6 +188,21 @@ class GeneratedContent(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SocialPost(Base):
+    __tablename__ = "social_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    media_path = Column(String, nullable=True)  # photo or video
+    media_type = Column(String, default="image")  # image, video
+    platform = Column(String, nullable=False, default="instagram")  # instagram, facebook, whatsapp, linkedin
+    caption = Column(Text, nullable=True)
+    hashtags = Column(String, nullable=True)
+    status = Column(String, default="draft")  # draft, approved, scheduled, published
+    scheduled_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 Base.metadata.create_all(bind=engine)
 
 # SQLite migration: add extra column if missing
@@ -411,6 +426,29 @@ class ContactNoteOut(ContactNoteCreate):
     contact_id: int
     file_path: Optional[str] = None
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SocialPostCreate(BaseModel):
+    platform: str = "instagram"
+    caption: Optional[str] = None
+    hashtags: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+
+
+class SocialPostOut(BaseModel):
+    id: int
+    media_path: Optional[str] = None
+    media_type: str = "image"
+    platform: str = "instagram"
+    caption: Optional[str] = None
+    hashtags: Optional[str] = None
+    status: str = "draft"
+    scheduled_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -1513,6 +1551,124 @@ def run_campaign(campaign_id: int, db: Session = Depends(get_db)):
 @app.get("/generated-contents", response_model=List[GeneratedContentOut])
 def list_generated_contents(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
     return db.query(GeneratedContent).order_by(GeneratedContent.created_at.desc()).offset(skip).limit(limit).all()
+
+
+# -------------------- Premium: Social Post Drafts --------------------
+
+
+def generate_social_post(media_path: str, platform: str, company: CompanyProfile) -> Dict[str, str]:
+    """Generate a caption and hashtags from a photo/video."""
+    if not openai_client:
+        return {"caption": "", "hashtags": ""}
+    image_b64 = None
+    try:
+        with Image.open(media_path) as img:
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            img.thumbnail((1200, 1200))
+            buffer = io.BytesIO()
+            img.save(buffer, format="JPEG", quality=85)
+            image_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+    except Exception as exc:
+        print("Image open error for social post:", exc)
+    company_info = (
+        f"Azienda: {company.name or 'N/D'}\n"
+        f"Descrizione: {company.description or 'N/D'}\n"
+        f"Prodotti: {company.products or 'N/D'}\n"
+        f"Valori: {company.values or 'N/D'}\n"
+        f"Tono: {company.tone or 'professionale e cordiale'}\n"
+    )
+    user_content: List[Dict[str, Any]] = [
+        {"type": "text", "text": (
+            f"Scrivi una didascalia per un post {platform} in italiano, basata su questa immagine/video. "
+            "Includi un titolo accattivante, una breve descrizione, un invito all'azione e 5-10 hashtag rilevanti. "
+            "Restituisci SOLO un oggetto JSON con chiavi 'caption' e 'hashtags'. Non scrivere testo fuori dal JSON.\n\n"
+            f"{company_info}"
+        )},
+    ]
+    if image_b64:
+        user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}})
+    try:
+        resp = openai_client.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Sei un social media manager per aziende agricole e artigianali italiane. Restituisci solo JSON."},
+                {"role": "user", "content": user_content},
+            ],
+            max_tokens=500,
+        )
+        content = resp.choices[0].message.content.strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1].rsplit("\n", 1)[0]
+            if content.startswith("json"):
+                content = content[4:].strip()
+        parsed = json.loads(content)
+        return {"caption": parsed.get("caption", ""), "hashtags": parsed.get("hashtags", "")}
+    except Exception as exc:
+        print("Social post generation error:", exc)
+    return {"caption": "", "hashtags": ""}
+
+
+@app.post("/social-posts", response_model=SocialPostOut)
+def create_social_post(platform: str = Form("instagram"), media_type: str = Form("image"), file: UploadFile = File(...), db: Session = Depends(get_db)):
+    if file and file.filename:
+        file_path = save_upload(file)
+    else:
+        raise HTTPException(status_code=400, detail="Nessun file caricato")
+    company = get_or_create_company_profile(db)
+    generated = generate_social_post(file_path, platform, company)
+    post = SocialPost(
+        media_path=file_path,
+        media_type=media_type,
+        platform=platform,
+        caption=generated.get("caption"),
+        hashtags=generated.get("hashtags"),
+        status="draft",
+    )
+    db.add(post)
+    db.commit()
+    db.refresh(post)
+    return post
+
+
+@app.get("/social-posts", response_model=List[SocialPostOut])
+def list_social_posts(db: Session = Depends(get_db)):
+    return db.query(SocialPost).order_by(SocialPost.created_at.desc()).all()
+
+
+@app.put("/social-posts/{post_id}", response_model=SocialPostOut)
+def update_social_post(post_id: int, payload: SocialPostCreate, db: Session = Depends(get_db)):
+    post = db.query(SocialPost).filter(SocialPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(post, key, value)
+    post.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(post)
+    return post
+
+
+@app.post("/social-posts/{post_id}/approve", response_model=SocialPostOut)
+def approve_social_post(post_id: int, db: Session = Depends(get_db)):
+    post = db.query(SocialPost).filter(SocialPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    post.status = "approved"
+    post.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(post)
+    return post
+
+
+@app.delete("/social-posts/{post_id}")
+def delete_social_post(post_id: int, db: Session = Depends(get_db)):
+    post = db.query(SocialPost).filter(SocialPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    db.delete(post)
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/health")

@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>DiSpace Lead Capture</title>
-  <link rel="stylesheet" href="style.css?v=28">
+  <link rel="stylesheet" href="style.css?v=29">
 </head>
 <body>
   <header>
@@ -120,6 +120,36 @@
       </div>
     </section>
 
+    <section id="social-section" style="display:none;">
+      <h2>Social Post</h2>
+      <p class="hint">Carica una foto o un video per creare una proposta di post/story.</p>
+      <form id="social-form" enctype="multipart/form-data">
+        <label>Piattaforma
+          <select id="social-platform">
+            <option value="instagram">Instagram</option>
+            <option value="facebook">Facebook</option>
+            <option value="whatsapp">WhatsApp Status</option>
+            <option value="linkedin">LinkedIn</option>
+          </select>
+        </label>
+        <label>Foto/Video <input type="file" id="social-file" accept="image/*,video/*"></label>
+        <div class="controls"><button type="submit">Genera proposta</button></div>
+      </form>
+      <div id="social-preview" style="display:none; margin-top:1rem;">
+        <img id="social-image-preview" style="max-width:100%; border-radius:8px; display:none;">
+        <label>Didascalia <textarea id="social-caption" rows="4"></textarea></label>
+        <label>Hashtag <input type="text" id="social-hashtags"></label>
+        <div class="controls">
+          <button id="btn-save-social">Salva bozza</button>
+          <button id="btn-approve-social">Approva</button>
+          <button id="btn-cancel-social">Annulla</button>
+        </div>
+      </div>
+      <h3>Proposte salvate</h3>
+      <ul id="social-posts-list"></ul>
+      <div class="controls"><button id="btn-refresh-social">Aggiorna</button></div>
+    </section>
+
     <section id="marketing-section">
       <h2>Contenuti generati</h2>
       <p class="hint">Scegli un contatto dalla lista e premi Proposta, WhatsApp, Story o Email.</p>
@@ -138,7 +168,7 @@
     </section>
   </main>
 
-  <script src="app.js?v=28"></script>
+  <script src="app.js?v=29"></script>
   <script>
     // Accesso libero: mostra subito l'app
     (function() {

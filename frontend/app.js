@@ -33,9 +33,23 @@ const btnEnrichCompany = document.getElementById('btn-enrich-company');
 const notesSection = document.getElementById('notes-section');
 const noteForm = document.getElementById('note-form');
 const btnCloseNotes = document.getElementById('btn-close-notes');
+const socialSection = document.getElementById('social-section');
+const socialForm = document.getElementById('social-form');
+const socialFile = document.getElementById('social-file');
+const socialPlatform = document.getElementById('social-platform');
+const socialPreview = document.getElementById('social-preview');
+const socialImagePreview = document.getElementById('social-image-preview');
+const socialCaption = document.getElementById('social-caption');
+const socialHashtags = document.getElementById('social-hashtags');
+const btnSaveSocial = document.getElementById('btn-save-social');
+const btnApproveSocial = document.getElementById('btn-approve-social');
+const btnCancelSocial = document.getElementById('btn-cancel-social');
+const btnRefreshSocial = document.getElementById('btn-refresh-social');
+const socialPostsList = document.getElementById('social-posts-list');
 
 let currentBlob = null;
 let currentContactId = null;
+let currentSocialPostId = null;
 
 async function startCamera() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -457,6 +471,126 @@ async function loadGeneratedContents() {
   }
 }
 
+async function generateSocialPost(e) {
+  e.preventDefault();
+  const file = socialFile.files[0];
+  if (!file) { alert('Seleziona una foto o un video'); return; }
+  const formData = new FormData();
+  formData.append('platform', socialPlatform.value);
+  formData.append('media_type', file.type.startsWith('video') ? 'video' : 'image');
+  formData.append('file', file);
+  try {
+    const res = await apiFetch(`${API}/social-posts`, { method: 'POST', body: formData });
+    if (!res.ok) throw new Error(await res.text());
+    const post = await res.json();
+    currentSocialPostId = post.id;
+    socialCaption.value = post.caption || '';
+    socialHashtags.value = post.hashtags || '';
+    if (file.type.startsWith('image')) {
+      socialImagePreview.src = URL.createObjectURL(file);
+      socialImagePreview.style.display = 'block';
+    } else {
+      socialImagePreview.style.display = 'none';
+    }
+    socialPreview.style.display = 'block';
+    await loadSocialPosts();
+  } catch (err) {
+    alert('Errore generazione social: ' + err.message);
+  }
+}
+
+async function saveSocialPost() {
+  if (!currentSocialPostId) return;
+  const data = {
+    caption: socialCaption.value,
+    hashtags: socialHashtags.value,
+  };
+  try {
+    const res = await apiFetch(`${API}/social-posts/${currentSocialPostId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    alert('Bozza salvata');
+    await loadSocialPosts();
+  } catch (err) {
+    alert('Errore salvataggio: ' + err.message);
+  }
+}
+
+async function approveSocialPost() {
+  if (!currentSocialPostId) return;
+  await saveSocialPost();
+  try {
+    const res = await apiFetch(`${API}/social-posts/${currentSocialPostId}/approve`, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    alert('Post approvato. Per ora non è pubblicato automaticamente: puoi copiare testo e immagine.')
+    await loadSocialPosts();
+  } catch (err) {
+    alert('Errore approvazione: ' + err.message);
+  }
+}
+
+function resetSocialForm() {
+  socialPreview.style.display = 'none';
+  socialImagePreview.style.display = 'none';
+  socialForm.reset();
+  currentSocialPostId = null;
+}
+
+async function loadSocialPosts() {
+  try {
+    const res = await apiFetch(`${API}/social-posts`);
+    if (!res.ok) throw new Error(await res.text());
+    const posts = await res.json();
+    socialPostsList.innerHTML = posts.map(p => `
+      <li>
+        <strong>${p.platform}</strong> - ${p.status}
+        <br><small>${p.created_at}</small>
+        <p>${(p.caption || '').substring(0, 80)}...</p>
+        ${p.media_path ? `<button onclick="viewSocialPost(${p.id})">Apri</button>` : ''}
+        <button class="btn-danger" onclick="deleteSocialPost(${p.id})">Elimina</button>
+      </li>
+    `).join('');
+  } catch (err) {
+    socialPostsList.innerHTML = `<li>Errore: ${err.message}</li>`;
+  }
+}
+
+window.viewSocialPost = async function(id) {
+  try {
+    const res = await apiFetch(`${API}/social-posts`);
+    if (!res.ok) throw new Error(await res.text());
+    const posts = await res.json();
+    const post = posts.find(p => p.id === id);
+    if (!post) return;
+    currentSocialPostId = post.id;
+    socialPlatform.value = post.platform;
+    socialCaption.value = post.caption || '';
+    socialHashtags.value = post.hashtags || '';
+    if (post.media_path) {
+      socialImagePreview.src = `${API}/${post.media_path}`;
+      socialImagePreview.style.display = 'block';
+    }
+    socialPreview.style.display = 'block';
+    window.scrollTo(0, socialPreview.offsetTop);
+  } catch (err) {
+    alert('Errore: ' + err.message);
+  }
+};
+
+window.deleteSocialPost = async function(id) {
+  if (!confirm('Vuoi eliminare questo post?')) return;
+  try {
+    const res = await apiFetch(`${API}/social-posts/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
+    await loadSocialPosts();
+  } catch (err) {
+    alert('Errore eliminazione: ' + err.message);
+  }
+};
+
 btnSnap.addEventListener('click', () => {
   if (!video.srcObject) {
     startCamera();
@@ -495,6 +629,12 @@ document.getElementById('btn-close-report').addEventListener('click', () => {
 if (noteForm) noteForm.addEventListener('submit', saveNote);
 if (btnCloseNotes) btnCloseNotes.addEventListener('click', () => { notesSection.style.display = 'none'; });
 
+if (socialForm) socialForm.addEventListener('submit', generateSocialPost);
+if (btnSaveSocial) btnSaveSocial.addEventListener('click', saveSocialPost);
+if (btnApproveSocial) btnApproveSocial.addEventListener('click', approveSocialPost);
+if (btnCancelSocial) btnCancelSocial.addEventListener('click', resetSocialForm);
+if (btnRefreshSocial) btnRefreshSocial.addEventListener('click', loadSocialPosts);
+
 const loginSection = document.getElementById('login-section');
 const mainApp = document.getElementById('main-app');
 const btnLogin = document.getElementById('btn-login');
@@ -508,9 +648,11 @@ function hasFeature(feature) {
 
 function applyPlanUI(cfg) {
   const companyBtn = document.getElementById('btn-open-company');
-  if (companyBtn && !hasFeature('company_profile')) companyBtn.style.display = 'none';
+  if (companyBtn) companyBtn.style.display = hasFeature('company_profile') ? 'inline-block' : 'none';
   const marketingSection = document.getElementById('marketing-section');
-  if (marketingSection && !hasFeature('campaigns')) marketingSection.style.display = 'none';
+  if (marketingSection) marketingSection.style.display = hasFeature('campaigns') ? 'block' : 'none';
+  const socialSection = document.getElementById('social-section');
+  if (socialSection) socialSection.style.display = hasFeature('social_scheduler') ? 'block' : 'none';
 }
 
 async function loadConfig() {
@@ -536,6 +678,7 @@ function showApp() {
   loadGeneratedContents();
   loadCompanyProfile();
   loadConfig();
+  loadSocialPosts();
 }
 
 async function doLogin() {
