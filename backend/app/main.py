@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     openrouter_http_referer: str = "https://localhost"
     openrouter_title: str = "DiSpace Lead Capture"
     tavily_api_key: Optional[str] = None
+    brave_api_key: Optional[str] = None
+    serper_api_key: Optional[str] = None
+    bing_api_key: Optional[str] = None
     clearbit_api_key: Optional[str] = None
     uploads_dir: str = "/app/data/uploads"
     app_title: str = "DiSpace Lead Capture"
@@ -658,27 +661,88 @@ def run_ocr(image_path: str) -> str:
 # -------------------- Enrichment & Report Services --------------------
 
 
+def _search_tavily(query: str, max_results: int) -> List[Dict[str, str]]:
+    headers = {"Content-Type": "application/json"}
+    payload = {"query": query, "max_results": max_results}
+    if settings.tavily_api_key:
+        headers["Authorization"] = f"Bearer {settings.tavily_api_key}"
+    else:
+        headers["X-Tavily-Access-Mode"] = "keyless"
+    resp = requests.post(
+        "https://api.tavily.com/search",
+        headers=headers,
+        json=payload,
+        timeout=20,
+    )
+    resp.raise_for_status()
+    return [
+        {"title": r.get("title"), "url": r.get("url"), "snippet": r.get("content", "")}
+        for r in resp.json().get("results", [])
+    ]
+
+
+def _search_brave(query: str, max_results: int) -> List[Dict[str, str]]:
+    if not settings.brave_api_key:
+        return []
+    resp = requests.get(
+        "https://api.search.brave.com/res/v1/web/search",
+        headers={"X-Subscription-Token": settings.brave_api_key, "Accept": "application/json"},
+        params={"q": query, "count": max_results},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    return [
+        {"title": r.get("title"), "url": r.get("url"), "snippet": r.get("description", "")}
+        for r in resp.json().get("web", {}).get("results", [])
+    ]
+
+
+def _search_serper(query: str, max_results: int) -> List[Dict[str, str]]:
+    if not settings.serper_api_key:
+        return []
+    resp = requests.post(
+        "https://google.serper.dev/search",
+        headers={"X-API-KEY": settings.serper_api_key, "Content-Type": "application/json"},
+        json={"q": query, "num": max_results},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    return [
+        {"title": r.get("title"), "url": r.get("link"), "snippet": r.get("snippet", "")}
+        for r in resp.json().get("organic", [])
+    ]
+
+
+def _search_bing(query: str, max_results: int) -> List[Dict[str, str]]:
+    if not settings.bing_api_key:
+        return []
+    resp = requests.get(
+        "https://api.bing.microsoft.com/v7.0/search",
+        headers={"Ocp-Apim-Subscription-Key": settings.bing_api_key},
+        params={"q": query, "count": max_results},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    return [
+        {"title": r.get("name"), "url": r.get("url"), "snippet": r.get("snippet", "")}
+        for r in resp.json().get("webPages", {}).get("value", [])
+    ]
+
+
 def search_web(query: str, max_results: int = 5) -> List[Dict[str, str]]:
-    try:
-        headers = {"Content-Type": "application/json"}
-        payload = {"query": query, "max_results": max_results}
-        if settings.tavily_api_key:
-            headers["Authorization"] = f"Bearer {settings.tavily_api_key}"
-        else:
-            headers["X-Tavily-Access-Mode"] = "keyless"
-        resp = requests.post(
-            "https://api.tavily.com/search",
-            headers=headers,
-            json=payload,
-            timeout=20,
-        )
-        resp.raise_for_status()
-        return [
-            {"title": r.get("title"), "url": r.get("url"), "snippet": r.get("content", "")}
-            for r in resp.json().get("results", [])
-        ]
-    except Exception as exc:
-        print("Tavily error:", exc)
+    providers = [
+        ("tavily", _search_tavily),
+        ("brave", _search_brave),
+        ("serper", _search_serper),
+        ("bing", _search_bing),
+    ]
+    for name, fn in providers:
+        try:
+            results = fn(query, max_results)
+            if results:
+                return results
+        except Exception as exc:
+            print(f"Search provider {name} error:", exc)
     return []
 
 
