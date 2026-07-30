@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 import os
 import re
@@ -370,7 +371,19 @@ def normalize_phone(value: str) -> str:
     return re.sub(r"[^\d+\-()\s]", "", value).strip()
 
 
-def extract_fields(text: str) -> dict:
+def extract_fields(text: str, image_path: Optional[str] = None) -> dict:
+    if openai_client and image_path:
+        try:
+            return extract_fields_with_vision(image_path)
+        except Exception as exc:
+            print("Vision extraction error:", exc)
+
+    if openai_client:
+        try:
+            return extract_fields_with_llm(text)
+        except Exception:
+            pass
+
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     data = {
         "name": None,
@@ -381,13 +394,8 @@ def extract_fields(text: str) -> dict:
         "website": None,
         "address": None,
         "linkedin": None,
+        "extra": None,
     }
-
-    if openai_client:
-        try:
-            return extract_fields_with_llm(text)
-        except Exception:
-            pass
 
     for line in lines:
         if not data["email"]:
@@ -451,6 +459,10 @@ def extract_fields_with_llm(text: str) -> dict:
         if content.startswith("json"):
             content = content[4:].strip()
     parsed = json.loads(content)
+    return _normalize_llm_output(parsed)
+
+
+def _normalize_llm_output(parsed: dict) -> dict:
     allowed = {"name", "company", "role", "email", "phone", "website", "address", "linkedin", "extra"}
     result = {k: parsed.get(k) for k in allowed}
 
@@ -481,6 +493,47 @@ def extract_fields_with_llm(text: str) -> dict:
     else:
         result["extra"] = None
     return result
+
+
+def extract_fields_with_vision(image_path: str) -> dict:
+    with Image.open(image_path) as img:
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        # Resize to avoid huge payloads while keeping readability
+        img.thumbnail((1600, 1600))
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=85)
+        b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    prompt = (
+        "Estrai i dati da questa immagine di un biglietto da visita o volantino. "
+        "Restituisci SOLO un oggetto JSON con le chiavi: "
+        "name, company, role, email, phone, website, address, linkedin, extra. "
+        "Se ci sono piu numeri di telefono o indirizzi, mettili tutti nello stesso campo separati da ' / '. "
+        "La chiave extra contenga solo dati extra rilevanti (partita iva, codice fiscale, CAP, citta, provincia, fax, note, prodotti, servizi). "
+        "Ometti le chiavi di extra senza valore. Non scrivere testo fuori dal JSON."
+    )
+    resp = openai_client.chat.completions.create(
+        model="openai/gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "Sei un estrattore di dati da biglietti da visita e volantini. Restituisci solo JSON."},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                ],
+            },
+        ],
+        max_tokens=700,
+    )
+    content = resp.choices[0].message.content.strip()
+    if content.startswith("```"):
+        content = content.split("\n", 1)[1].rsplit("\n", 1)[0]
+        if content.startswith("json"):
+            content = content[4:].strip()
+    parsed = json.loads(content)
+    return _normalize_llm_output(parsed)
 
 
 def save_upload(file: UploadFile) -> str:
@@ -687,7 +740,7 @@ def upload_business_card(files: List[UploadFile] = File(...), db: Session = Depe
             raise HTTPException(status_code=500, detail=f"OCR failed: {exc}") from exc
 
     raw_text = "\n\n".join(all_texts)
-    fields = extract_fields(raw_text)
+    fields = extract_fields(raw_text, image_path=first_path)
     contact = Contact(raw_text=raw_text, image_path=first_path, **fields)
     db.add(contact)
     db.commit()
