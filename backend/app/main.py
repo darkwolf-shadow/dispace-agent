@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     uploads_dir: str = "/app/data/uploads"
     app_title: str = "DiSpace Lead Capture"
     owner_name: str = ""
+    plan: str = "pro"  # base, pro, premium
 
     class Config:
         env_file = ".env"
@@ -1029,7 +1030,19 @@ def get_or_create_company_profile(db: Session) -> CompanyProfile:
 
 @app.get("/config")
 def get_config():
-    return {"app_title": settings.app_title, "owner_name": settings.owner_name, "disable_auth": settings.disable_auth}
+    plan = settings.plan.lower()
+    features = ["capture", "export", "notes"]
+    if plan in ("pro", "premium"):
+        features.extend(["enrich", "report", "proposal", "whatsapp", "story", "email", "company_profile"])
+    if plan == "premium":
+        features.extend(["campaigns", "social_scheduler", "analytics"])
+    return {
+        "app_title": settings.app_title,
+        "owner_name": settings.owner_name,
+        "disable_auth": settings.disable_auth,
+        "plan": plan,
+        "features": features,
+    }
 
 
 @app.get("/company-profile", response_model=CompanyProfileOut)

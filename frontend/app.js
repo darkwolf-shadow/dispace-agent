@@ -348,12 +348,12 @@ async function loadContacts() {
             ${c.tags ? `<br><small>${c.tags.join(', ')}</small>` : ''}
           </div>
           <div class="actions">
-            <button onclick="enrichContact(${c.id})">Arricchisci</button>
-            <button onclick="showReport(${c.id})">Report</button>
+            ${hasFeature('enrich') ? `<button onclick="enrichContact(${c.id})">Arricchisci</button>` : ''}
+            ${hasFeature('report') ? `<button onclick="showReport(${c.id})">Report</button>` : ''}
             <button onclick="showNotes(${c.id})">Note</button>
-            <button onclick="generateForContact(${c.id}, 'proposal')">Proposta</button>
-            <button onclick="generateForContact(${c.id}, 'whatsapp')">WhatsApp</button>
-            <button onclick="generateForContact(${c.id}, 'story')">Story</button>
+            ${hasFeature('proposal') ? `<button onclick="generateForContact(${c.id}, 'proposal')">Proposta</button>` : ''}
+            ${hasFeature('whatsapp') ? `<button onclick="generateForContact(${c.id}, 'whatsapp')">WhatsApp</button>` : ''}
+            ${hasFeature('story') ? `<button onclick="generateForContact(${c.id}, 'story')">Story</button>` : ''}
             <button class="btn-danger" onclick="deleteContact(${c.id})">Elimina</button>
           </div>
         </div>
@@ -500,15 +500,30 @@ const mainApp = document.getElementById('main-app');
 const btnLogin = document.getElementById('btn-login');
 const loginError = document.getElementById('login-error');
 
+let appFeatures = [];
+
+function hasFeature(feature) {
+  return appFeatures.includes(feature);
+}
+
+function applyPlanUI(cfg) {
+  const companyBtn = document.getElementById('btn-open-company');
+  if (companyBtn && !hasFeature('company_profile')) companyBtn.style.display = 'none';
+  const marketingSection = document.getElementById('marketing-section');
+  if (marketingSection && !hasFeature('campaigns')) marketingSection.style.display = 'none';
+}
+
 async function loadConfig() {
   try {
     const res = await apiFetch(`${API}/config`);
     if (!res.ok) return;
     const cfg = await res.json();
+    appFeatures = cfg.features || [];
     const titleEl = document.querySelector('header h1');
     if (titleEl && cfg.app_title) titleEl.textContent = cfg.app_title;
     const ownerEl = document.getElementById('owner-name');
     if (ownerEl && cfg.owner_name) ownerEl.textContent = cfg.owner_name;
+    applyPlanUI(cfg);
   } catch (err) {
     console.error('Config error:', err.message);
   }
