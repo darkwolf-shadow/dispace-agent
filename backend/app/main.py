@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import pytesseract
 import requests
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
