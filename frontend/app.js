@@ -44,6 +44,7 @@ const socialHashtags = document.getElementById('social-hashtags');
 const btnSaveSocial = document.getElementById('btn-save-social');
 const btnApproveSocial = document.getElementById('btn-approve-social');
 const btnPublishSocial = document.getElementById('btn-publish-social');
+const btnCopySocial = document.getElementById('btn-copy-social');
 const btnCancelSocial = document.getElementById('btn-cancel-social');
 const btnRefreshSocial = document.getElementById('btn-refresh-social');
 const socialCredentialSelect = document.getElementById('social-credential');
@@ -551,6 +552,18 @@ async function publishSocialPost() {
   }
 }
 
+async function copySocialText() {
+  if (!currentSocialPostId) return;
+  const text = `${socialCaption.value}\n\n${socialHashtags.value}`.trim();
+  if (!text) { alert('Nessun testo da copiare'); return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    alert('Testo copiato. Ora puoi incollarlo su Instagram/Facebook.');
+  } catch (err) {
+    alert('Copia non riuscita, seleziona e copia manualmente.');
+  }
+}
+
 if (socialPlatform) socialPlatform.addEventListener('change', populateCredentialSelect);
 
 async function generateSocialPost(e) {
@@ -715,6 +728,7 @@ if (socialForm) socialForm.addEventListener('submit', generateSocialPost);
 if (btnSaveSocial) btnSaveSocial.addEventListener('click', saveSocialPost);
 if (btnApproveSocial) btnApproveSocial.addEventListener('click', approveSocialPost);
 if (btnPublishSocial) btnPublishSocial.addEventListener('click', publishSocialPost);
+if (btnCopySocial) btnCopySocial.addEventListener('click', copySocialText);
 if (btnCancelSocial) btnCancelSocial.addEventListener('click', resetSocialForm);
 if (btnRefreshSocial) btnRefreshSocial.addEventListener('click', loadSocialPosts);
 if (credentialForm) credentialForm.addEventListener('submit', saveCredential);
