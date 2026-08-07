@@ -2021,6 +2021,120 @@ def search_memories(q: str, db: Session = Depends(get_db)):
     return results
 
 
+# -------------------- Telegram Bot Webhook --------------------
+
+
+def _telegram_send_message(chat_id: str, text: str, token: Optional[str] = None):
+    if not token:
+        cred = (
+            SessionLocal()
+            .query(SocialCredential)
+            .filter(SocialCredential.platform == "telegram")
+            .order_by(SocialCredential.created_at.desc())
+            .first()
+        )
+        if not cred:
+            return False
+        token = cred.access_token
+    else:
+        cred = None
+    try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        requests.post(
+            url,
+            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+            timeout=30,
+        )
+        return True
+    except Exception as exc:
+        print("Telegram send message error:", exc)
+    return False
+
+
+@app.post("/webhook/telegram")
+def telegram_webhook(update: Dict[str, Any], db: Session = Depends(get_db)):
+    message = update.get("message") or {}
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
+    text = (message.get("text") or "").strip().lower()
+    if not chat_id:
+        return {"ok": True}
+
+    if text == "/start":
+        reply = (
+            "Ciao, sono Mangiafuoco.\n\n"
+            "Inviami una foto, un audio o una nota e io la salvo come memoria.\n"
+            "Comandi disponibili:\n"
+            "/help - aiuto\n"
+            "/memorie - ultime memorie\n"
+            "/cerca parola - cerca nelle memorie"
+        )
+    elif text == "/help":
+        reply = (
+            "Mangiafuoco salva memorie per il tuo agente.\n\n"
+            "Puoi inviarmi:\n"
+            "- foto\n"
+            "- audio\n"
+            "- messaggi di testo\n\n"
+            "Ogni contenuto verrà salvato e reso disponibile al tuo agente.\n"
+            "Usa /memorie per rivedere le ultime e /cerca parola per cercare."
+        )
+    elif text == "/memorie":
+        items = (
+            db.query(Memory)
+            .order_by(Memory.created_at.desc())
+            .limit(5)
+            .all()
+        )
+        if not items:
+            reply = "Non ho ancora memorie salvate."
+        else:
+            lines = ["Ultime memorie:"]
+            for m in items:
+                cap = (m.caption or "(senza testo)")[:60]
+                date = m.created_at.strftime("%d/%m %H:%M") if m.created_at else ""
+                lines.append(f"• <b>{m.type}</b> {date}\n  {cap}")
+            reply = "\n".join(lines)
+    elif text.startswith("/cerca "):
+        q = text[7:].strip()
+        pattern = f"%{q}%"
+        results = (
+            db.query(Memory)
+            .filter(
+                (Memory.caption.ilike(pattern))
+                | (Memory.extracted_text.ilike(pattern))
+                | (Memory.summary.ilike(pattern))
+                | (Memory.tags.ilike(pattern))
+            )
+            .order_by(Memory.created_at.desc())
+            .limit(10)
+            .all()
+        )
+        if not results:
+            reply = f"Nessuna memoria trovata per '{q}'."
+        else:
+            lines = [f"Risultati per '{q}':"]
+            for m in results:
+                cap = (m.caption or "(senza testo)")[:60]
+                date = m.created_at.strftime("%d/%m %H:%M") if m.created_at else ""
+                lines.append(f"• <b>{m.type}</b> {date}\n  {cap}")
+            reply = "\n".join(lines)
+    else:
+        # Save plain text message as memory
+        caption = message.get("text", "")
+        if caption:
+            memory = Memory(type="note", caption=caption, source="telegram")
+            db.add(memory)
+            db.commit()
+            db.refresh(memory)
+            reply = "Memoria salvata. ID: " + str(memory.id)
+        else:
+            reply = "Non ho capito. Usa /help per i comandi."
+
+    _telegram_send_message(str(chat_id), reply)
+    return {"ok": True}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
