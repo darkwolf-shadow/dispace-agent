@@ -1,0 +1,21 @@
+{
+  "name": "mangiafuoco",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo 'Nessun build richiesto, i file sono in www/'",
+    "sync": "npx cap sync",
+    "android": "npx cap open android",
+    "build:apk": "npx cap sync && cd android && ./gradlew assembleDebug"
+  },
+  "keywords": ["capacitor", "android", "memory", "ai"],
+  "author": "",
+  "license": "ISC",
+  "description": "Mangiafuoco - app mobile per catturare memorie e nutrire l'agente",
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/camera": "^8.2.2",
+    "@capacitor/cli": "^7.6.8",
+    "@capacitor/core": "^8.5.0"
+  }
+}

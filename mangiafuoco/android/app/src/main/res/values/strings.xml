@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mangiafuoco</string>
+    <string name="title_activity_main">Mangiafuoco</string>
+    <string name="package_name">com.omni.mangiafuoco</string>
+    <string name="custom_url_scheme">com.omni.mangiafuoco</string>
+</resources>

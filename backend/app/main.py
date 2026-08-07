@@ -226,6 +226,22 @@ class SocialPublishLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class Memory(Base):
+    __tablename__ = "memories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String, nullable=False, default="note")  # image, audio, video, note
+    caption = Column(Text, nullable=True)
+    tags = Column(String, nullable=True)
+    media_path = Column(String, nullable=True)
+    source = Column(String, nullable=True)
+    extracted_text = Column(Text, nullable=True)
+    summary = Column(Text, nullable=True)
+    gps_lat = Column(String, nullable=True)
+    gps_lon = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 Base.metadata.create_all(bind=engine)
 
 # SQLite migration: add extra column if missing
@@ -503,6 +519,23 @@ class SocialCredentialOut(BaseModel):
         if isinstance(v, dict):
             return json.dumps(v)
         return v
+
+
+class MemoryOut(BaseModel):
+    id: int
+    type: str
+    caption: Optional[str] = None
+    tags: Optional[str] = None
+    media_path: Optional[str] = None
+    source: Optional[str] = None
+    extracted_text: Optional[str] = None
+    summary: Optional[str] = None
+    gps_lat: Optional[str] = None
+    gps_lon: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 app = FastAPI(title="DiSpace Lead Capture API", version="0.3.0")
@@ -1860,6 +1893,104 @@ def publish_social_post(post_id: int, credential_id: Optional[int] = None, db: S
     if status == "error":
         raise HTTPException(status_code=500, detail=message)
     return {"ok": True, "post": SocialPostOut.from_orm(post), "result": json.loads(message)}
+
+
+# -------------------- Mangiafuoco: Memory Feed --------------------
+
+
+def _extract_text_from_image(path: str) -> str:
+    try:
+        with Image.open(path) as img:
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(2.0)
+            return pytesseract.image_to_string(img, lang="ita+eng") or ""
+    except Exception as exc:
+        print("OCR memory error:", exc)
+    return ""
+
+
+@app.post("/mangiafuoco/memories", response_model=MemoryOut)
+def create_memory(
+    type: str = Form("note"),
+    caption: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    source: Optional[str] = Form("mangiafuoco"),
+    gps_lat: Optional[str] = Form(None),
+    gps_lon: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    file_path = None
+    if file and file.filename:
+        file_path = save_upload(file)
+
+    extracted_text = ""
+    summary = None
+    if file_path and type == "image":
+        extracted_text = _extract_text_from_image(file_path)
+
+    # Generate summary if we have caption or extracted text
+    text_for_summary = " ".join([caption or "", extracted_text]).strip()
+    if text_for_summary and openai_client:
+        try:
+            prompt = (
+                "Sei un assistente personale. Riassumi in 2-3 frasi in italiano il seguente contenuto, "
+                "evidenziando persone, luoghi, argomenti e azioni da fare.\n\n"
+                f"{text_for_summary[:2000]}"
+            )
+            resp = openai_client.chat.completions.create(
+                model="openai/gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "Sei un assistente personale che crea memorie concise."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=300,
+            )
+            summary = resp.choices[0].message.content.strip()
+        except Exception as exc:
+            print("Memory summary error:", exc)
+
+    memory = Memory(
+        type=type,
+        caption=caption,
+        tags=tags,
+        media_path=file_path,
+        source=source,
+        extracted_text=extracted_text or None,
+        summary=summary,
+        gps_lat=gps_lat,
+        gps_lon=gps_lon,
+    )
+    db.add(memory)
+    db.commit()
+    db.refresh(memory)
+    return memory
+
+
+@app.get("/mangiafuoco/memories", response_model=List[MemoryOut])
+def list_memories(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    return db.query(Memory).order_by(Memory.created_at.desc()).offset(skip).limit(limit).all()
+
+
+@app.get("/mangiafuoco/memories/search")
+def search_memories(q: str, db: Session = Depends(get_db)):
+    # Simple text search for now; can be upgraded to vector search later
+    pattern = f"%{q}%"
+    results = (
+        db.query(Memory)
+        .filter(
+            (Memory.caption.ilike(pattern))
+            | (Memory.extracted_text.ilike(pattern))
+            | (Memory.summary.ilike(pattern))
+            | (Memory.tags.ilike(pattern))
+        )
+        .order_by(Memory.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    return results
 
 
 @app.get("/health")

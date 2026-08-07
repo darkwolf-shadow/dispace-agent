@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#d94f0e">
+  <title>Mangiafuoco</title>
+  <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+  <header>
+    <h1>Mangiafuoco</h1>
+    <p>Brucia i ricordi, nutri il tuo agente</p>
+  </header>
+
+  <main>
+    <section class="capture-card">
+      <h2>Cattura qualcosa</h2>
+      <p>Scatta una foto, registra un audio o scrivi una nota. Mangiafuoco lo invia al tuo agente.</p>
+
+      <div class="preview" id="preview-box">
+        <img id="photo-preview" style="display:none;" alt="anteprima">
+        <audio id="audio-preview" controls style="display:none;"></audio>
+        <video id="video-preview" controls style="display:none;"></video>
+      </div>
+
+      <div class="actions">
+        <button id="btn-photo">Scatta foto</button>
+        <button id="btn-audio">Registra audio</button>
+        <button id="btn-note">Nota testuale</button>
+      </div>
+
+      <label>Descrivi cosa stai catturando
+        <textarea id="caption" rows="2" placeholder="es. riunione con Cida, proposta olio EVO"></textarea>
+      </label>
+
+      <label>Tag (separati da virgola)
+        <input type="text" id="tags" placeholder="cliente, fiera, appuntamento">
+      </label>
+
+      <div class="actions">
+        <button id="btn-send" disabled>Invia a Mangiafuoco</button>
+        <button id="btn-cancel" class="secondary">Annulla</button>
+      </div>
+
+      <p id="status" class="status"></p>
+    </section>
+
+    <section class="memories-card">
+      <h2>Memorie recenti</h2>
+      <ul id="memories-list"></ul>
+      <button id="btn-refresh" class="secondary">Aggiorna</button>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
+  <script src="app.js?v=1"></script>
+</body>
+</html>

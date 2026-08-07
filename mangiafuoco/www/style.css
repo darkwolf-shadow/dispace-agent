@@ -1,0 +1,142 @@
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #fff8f0;
+  color: #3d2b1f;
+}
+
+header {
+  background: #d94f0e;
+  color: white;
+  padding: 1rem;
+  text-align: center;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+header p {
+  margin: 0.3rem 0 0;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+main {
+  padding: 1rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.capture-card, .memories-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+h2 {
+  margin-top: 0;
+  font-size: 1.2rem;
+}
+
+p {
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+label {
+  display: block;
+  margin: 0.8rem 0;
+  font-size: 0.95rem;
+}
+
+textarea, input[type="text"] {
+  width: 100%;
+  padding: 0.6rem;
+  margin-top: 0.3rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-sizing: border-box;
+  font-size: 1rem;
+}
+
+.preview {
+  margin: 0.8rem 0;
+  text-align: center;
+  min-height: 120px;
+  background: #f4f4f4;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.preview img, .preview video, .preview audio {
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 8px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.8rem 0;
+}
+
+button {
+  flex: 1 1 45%;
+  padding: 0.8rem;
+  border: none;
+  border-radius: 8px;
+  background: #d94f0e;
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: #aaa;
+}
+
+button.secondary {
+  background: #6b5b4f;
+}
+
+.status {
+  font-size: 0.9rem;
+  color: #2e7d32;
+  min-height: 1.2rem;
+}
+
+.status.error {
+  color: #c62828;
+}
+
+#memories-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#memories-list li {
+  border-bottom: 1px solid #eee;
+  padding: 0.7rem 0;
+}
+
+#memories-list li:last-child {
+  border-bottom: none;
+}
+
+#memories-list small {
+  color: #888;
+}
+
+#memories-list p {
+  margin: 0.3rem 0;
+}
