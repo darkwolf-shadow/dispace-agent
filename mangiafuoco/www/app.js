@@ -4,6 +4,10 @@ const previewBox = document.getElementById('preview-box');
 const photoPreview = document.getElementById('photo-preview');
 const audioPreview = document.getElementById('audio-preview');
 const videoPreview = document.getElementById('video-preview');
+const previewEmpty = document.getElementById('preview-empty');
+const recordingIndicator = document.getElementById('recording-indicator');
+const recordingTimer = document.getElementById('recording-timer');
+const recordingProgress = document.getElementById('recording-progress');
 const captionInput = document.getElementById('caption');
 const tagsInput = document.getElementById('tags');
 const btnPhoto = document.getElementById('btn-photo');
@@ -12,6 +16,7 @@ const btnNote = document.getElementById('btn-note');
 const btnSend = document.getElementById('btn-send');
 const btnCancel = document.getElementById('btn-cancel');
 const btnRefresh = document.getElementById('btn-refresh');
+const btnClearPreview = document.getElementById('btn-clear-preview');
 const sendTelegram = document.getElementById('send-telegram');
 const statusEl = document.getElementById('status');
 const memoriesList = document.getElementById('memories-list');
@@ -20,10 +25,23 @@ let currentBlob = null;
 let currentType = null;
 let mediaRecorder = null;
 let audioChunks = [];
+let recordingStartTime = null;
+let recordingInterval = null;
+
+const MAX_RECORDING_SECONDS = 60;
 
 function setStatus(msg, isError = false) {
   statusEl.textContent = msg;
   statusEl.className = 'status ' + (isError ? 'error' : '');
+}
+
+function updatePreviewEmpty() {
+  const hasPreview = photoPreview.style.display !== 'none' ||
+    audioPreview.style.display !== 'none' ||
+    videoPreview.style.display !== 'none' ||
+    currentType === 'note';
+  previewEmpty.style.display = hasPreview ? 'none' : 'block';
+  btnClearPreview.style.display = hasPreview ? 'inline-block' : 'none';
 }
 
 function resetPreview() {
@@ -40,6 +58,7 @@ function resetPreview() {
   if (sendTelegram) sendTelegram.checked = false;
   btnSend.disabled = true;
   setStatus('');
+  updatePreviewEmpty();
 }
 
 async function takePhoto() {
@@ -93,6 +112,14 @@ async function showBlob(blob, type) {
     audioPreview.style.display = 'none';
   }
   btnSend.disabled = false;
+  updatePreviewEmpty();
+}
+
+function formatTime(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+  const s = (totalSeconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
 }
 
 async function startRecording() {
@@ -105,16 +132,41 @@ async function startRecording() {
       const blob = new Blob(audioChunks, { type: 'audio/webm' });
       await showBlob(blob, 'audio');
       stream.getTracks().forEach(t => t.stop());
-      btnAudio.textContent = 'Registra audio';
-      btnAudio.onclick = startRecording;
+      stopRecordingUI();
     };
-    mediaRecorder.start();
-    btnAudio.textContent = 'Ferma registrazione';
-    btnAudio.onclick = stopRecording;
-    setStatus('Registrazione in corso...');
+    mediaRecorder.start(1000);
+    startRecordingUI();
   } catch (err) {
     setStatus('Errore microfono: ' + err.message, true);
   }
+}
+
+function startRecordingUI() {
+  recordingStartTime = Date.now();
+  recordingIndicator.style.display = 'flex';
+  recordingTimer.textContent = '00:00';
+  recordingProgress.style.width = '0%';
+  btnAudio.textContent = 'Ferma registrazione';
+  btnAudio.onclick = stopRecording;
+  setStatus('Registrazione in corso...');
+  recordingInterval = setInterval(() => {
+    const elapsed = Date.now() - recordingStartTime;
+    recordingTimer.textContent = formatTime(elapsed);
+    const pct = Math.min((elapsed / (MAX_RECORDING_SECONDS * 1000)) * 100, 100);
+    recordingProgress.style.width = pct + '%';
+    if (elapsed >= MAX_RECORDING_SECONDS * 1000) {
+      stopRecording();
+    }
+  }, 500);
+}
+
+function stopRecordingUI() {
+  if (recordingInterval) clearInterval(recordingInterval);
+  recordingInterval = null;
+  recordingIndicator.style.display = 'none';
+  btnAudio.textContent = 'Registra audio';
+  btnAudio.onclick = startRecording;
+  setStatus('Registrazione completata.');
 }
 
 function stopRecording() {
@@ -128,7 +180,9 @@ function addNote() {
   audioPreview.style.display = 'none';
   videoPreview.style.display = 'none';
   btnSend.disabled = false;
+  updatePreviewEmpty();
   setStatus('Scrivi la nota e premi Invia.');
+  captionInput.focus();
 }
 
 async function sendMemory() {
@@ -195,5 +249,6 @@ btnNote.addEventListener('click', addNote);
 btnSend.addEventListener('click', sendMemory);
 btnCancel.addEventListener('click', resetPreview);
 btnRefresh.addEventListener('click', loadMemories);
+if (btnClearPreview) btnClearPreview.addEventListener('click', resetPreview);
 
 loadMemories();

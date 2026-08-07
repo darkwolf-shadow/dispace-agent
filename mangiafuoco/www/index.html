@@ -22,12 +22,20 @@
         <img id="photo-preview" style="display:none;" alt="anteprima">
         <audio id="audio-preview" controls style="display:none;"></audio>
         <video id="video-preview" controls style="display:none;"></video>
+        <span id="preview-empty">Nessuna cattura</span>
+      </div>
+
+      <div id="recording-indicator" style="display:none;">
+        <span class="rec-dot"></span>
+        <span id="recording-timer">00:00</span>
+        <div class="progress"><div id="recording-progress"></div></div>
       </div>
 
       <div class="actions">
         <button id="btn-photo">Scatta foto</button>
         <button id="btn-audio">Registra audio</button>
         <button id="btn-note">Nota testuale</button>
+        <button id="btn-clear-preview" class="secondary" style="display:none;">Cancella cattura</button>
       </div>
 
       <label>Descrivi cosa stai catturando
