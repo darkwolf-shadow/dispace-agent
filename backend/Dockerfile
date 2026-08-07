@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/app /app/app
 COPY frontend /app/frontend
+COPY mangiafuoco/www /app/mangiafuoco
 
 RUN mkdir -p /app/data/uploads
 

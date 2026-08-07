@@ -1998,5 +1998,8 @@ def health():
     return {"status": "ok"}
 
 
+if os.path.exists("/app/mangiafuoco"):
+    app.mount("/mangiafuoco", StaticFiles(directory="/app/mangiafuoco", html=True), name="mangiafuoco")
+
 if os.path.exists("/app/frontend"):
     app.mount("/", StaticFiles(directory="/app/frontend", html=True), name="frontend")
