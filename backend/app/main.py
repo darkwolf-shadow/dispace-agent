@@ -1980,16 +1980,24 @@ def create_memory(
                 extra = json.loads(telegram_cred.extra or "{}")
                 chat_id = extra.get("chat_id")
                 if chat_id:
-                    text = f"#memoria Mangiafuoco\n\n{caption or ''}\n\nRiassunto: {summary or ''}\n\nTag: {tags or ''}"
+                    lines = ["#memoria Mangiafuoco"]
+                    if caption:
+                        lines.append(caption)
+                    if summary:
+                        lines.append(f"Riassunto: {summary}")
+                    if tags:
+                        lines.append(f"Tag: {tags}")
+                    text = "\n\n".join(lines)
                     if file_path and os.path.exists(file_path):
                         url = f"https://api.telegram.org/bot{telegram_cred.access_token}/sendPhoto"
                         with open(file_path, "rb") as f:
                             files = {"photo": f}
-                            data = {"chat_id": chat_id, "caption": text, "parse_mode": "HTML"}
+                            caption_text = text[:1024]
+                            data = {"chat_id": chat_id, "caption": caption_text}
                             requests.post(url, data=data, files=files, timeout=30)
                     else:
                         url = f"https://api.telegram.org/bot{telegram_cred.access_token}/sendMessage"
-                        data = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+                        data = {"chat_id": chat_id, "text": text}
                         requests.post(url, json=data, timeout=30)
             except Exception as exc:
                 print("Send memory to telegram error:", exc)
@@ -2036,19 +2044,32 @@ def _telegram_send_message(chat_id: str, text: str, token: Optional[str] = None)
         if not cred:
             return False
         token = cred.access_token
-    else:
-        cred = None
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        requests.post(
-            url,
-            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
-            timeout=30,
-        )
+        requests.post(url, json={"chat_id": chat_id, "text": text}, timeout=30)
         return True
     except Exception as exc:
         print("Telegram send message error:", exc)
     return False
+
+
+def _telegram_download_file(file_id: str, token: str) -> Optional[bytes]:
+    try:
+        resp = requests.get(
+            f"https://api.telegram.org/bot{token}/getFile?file_id={file_id}",
+            timeout=30,
+        )
+        data = resp.json()
+        if data.get("ok") and data.get("result", {}).get("file_path"):
+            file_path = data["result"]["file_path"]
+            file_resp = requests.get(
+                f"https://api.telegram.org/file/bot{token}/{file_path}",
+                timeout=60,
+            )
+            return file_resp.content
+    except Exception as exc:
+        print("Telegram download file error:", exc)
+    return None
 
 
 @app.post("/webhook/telegram")
@@ -2056,11 +2077,85 @@ def telegram_webhook(update: Dict[str, Any], db: Session = Depends(get_db)):
     message = update.get("message") or {}
     chat = message.get("chat") or {}
     chat_id = chat.get("id")
-    text = (message.get("text") or "").strip().lower()
+    text_raw = (message.get("text") or "").strip()
+    text_lower = text_raw.lower()
     if not chat_id:
         return {"ok": True}
 
-    if text == "/start":
+    cred = (
+        SessionLocal()
+        .query(SocialCredential)
+        .filter(SocialCredential.platform == "telegram")
+        .order_by(SocialCredential.created_at.desc())
+        .first()
+    )
+    token = cred.access_token if cred else None
+
+    # Handle photos sent to the bot
+    photos = message.get("photo")
+    if photos:
+        file_id = photos[-1].get("file_id")
+        if file_id and token:
+            file_bytes = _telegram_download_file(file_id, token)
+            if file_bytes:
+                ext = ".jpg"
+                filename = f"{uuid.uuid4().hex}{ext}"
+                file_path = os.path.join(settings.uploads_dir, filename)
+                with open(file_path, "wb") as f:
+                    f.write(file_bytes)
+                extracted = ""
+                try:
+                    with Image.open(file_path) as img:
+                        if img.mode not in ("RGB", "L"):
+                            img = img.convert("RGB")
+                        extracted = pytesseract.image_to_string(img, lang="ita+eng") or ""
+                except Exception as exc:
+                    print("OCR telegram photo error:", exc)
+                memory = Memory(
+                    type="image",
+                    caption=text_raw,
+                    media_path=file_path,
+                    source="telegram",
+                    extracted_text=extracted or None,
+                )
+                db.add(memory)
+                db.commit()
+                db.refresh(memory)
+                reply = f"Foto salvata come memoria ID {memory.id}."
+                if extracted:
+                    reply += f"\nTesto estratto:\n{extracted[:500]}"
+                _telegram_send_message(str(chat_id), reply, token=token)
+                return {"ok": True}
+
+    # Handle voice/audio sent to the bot
+    voice = message.get("voice") or message.get("audio")
+    if voice:
+        file_id = voice.get("file_id")
+        if file_id and token:
+            file_bytes = _telegram_download_file(file_id, token)
+            if file_bytes:
+                ext = ".ogg"
+                filename = f"{uuid.uuid4().hex}{ext}"
+                file_path = os.path.join(settings.uploads_dir, filename)
+                with open(file_path, "wb") as f:
+                    f.write(file_bytes)
+                memory = Memory(
+                    type="audio",
+                    caption=text_raw,
+                    media_path=file_path,
+                    source="telegram",
+                )
+                db.add(memory)
+                db.commit()
+                db.refresh(memory)
+                _telegram_send_message(
+                    str(chat_id),
+                    f"Audio salvato come memoria ID {memory.id}.",
+                    token=token,
+                )
+                return {"ok": True}
+
+    if text_lower == "/start":
         reply = (
             "Ciao, sono Mangiafuoco.\n\n"
             "Inviami una foto, un audio o una nota e io la salvo come memoria.\n"
@@ -2069,7 +2164,7 @@ def telegram_webhook(update: Dict[str, Any], db: Session = Depends(get_db)):
             "/memorie - ultime memorie\n"
             "/cerca parola - cerca nelle memorie"
         )
-    elif text == "/help":
+    elif text_lower == "/help":
         reply = (
             "Mangiafuoco salva memorie per il tuo agente.\n\n"
             "Puoi inviarmi:\n"
@@ -2079,7 +2174,7 @@ def telegram_webhook(update: Dict[str, Any], db: Session = Depends(get_db)):
             "Ogni contenuto verrà salvato e reso disponibile al tuo agente.\n"
             "Usa /memorie per rivedere le ultime e /cerca parola per cercare."
         )
-    elif text == "/memorie":
+    elif text_lower == "/memorie":
         items = (
             db.query(Memory)
             .order_by(Memory.created_at.desc())
@@ -2093,10 +2188,10 @@ def telegram_webhook(update: Dict[str, Any], db: Session = Depends(get_db)):
             for m in items:
                 cap = (m.caption or "(senza testo)")[:60]
                 date = m.created_at.strftime("%d/%m %H:%M") if m.created_at else ""
-                lines.append(f"• <b>{m.type}</b> {date}\n  {cap}")
+                lines.append(f"• {m.type} {date}\n  {cap}")
             reply = "\n".join(lines)
-    elif text.startswith("/cerca "):
-        q = text[7:].strip()
+    elif text_lower.startswith("/cerca "):
+        q = text_lower[7:].strip()
         pattern = f"%{q}%"
         results = (
             db.query(Memory)
@@ -2117,13 +2212,12 @@ def telegram_webhook(update: Dict[str, Any], db: Session = Depends(get_db)):
             for m in results:
                 cap = (m.caption or "(senza testo)")[:60]
                 date = m.created_at.strftime("%d/%m %H:%M") if m.created_at else ""
-                lines.append(f"• <b>{m.type}</b> {date}\n  {cap}")
+                lines.append(f"• {m.type} {date}\n  {cap}")
             reply = "\n".join(lines)
     else:
         # Save plain text message as memory
-        caption = message.get("text", "")
-        if caption:
-            memory = Memory(type="note", caption=caption, source="telegram")
+        if text_raw:
+            memory = Memory(type="note", caption=text_raw, source="telegram")
             db.add(memory)
             db.commit()
             db.refresh(memory)
@@ -2131,7 +2225,7 @@ def telegram_webhook(update: Dict[str, Any], db: Session = Depends(get_db)):
         else:
             reply = "Non ho capito. Usa /help per i comandi."
 
-    _telegram_send_message(str(chat_id), reply)
+    _telegram_send_message(str(chat_id), reply, token=token)
     return {"ok": True}
 
 
