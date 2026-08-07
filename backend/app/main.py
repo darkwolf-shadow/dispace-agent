@@ -1919,6 +1919,7 @@ def create_memory(
     source: Optional[str] = Form("mangiafuoco"),
     gps_lat: Optional[str] = Form(None),
     gps_lon: Optional[str] = Form(None),
+    send_to_telegram: bool = Form(False),
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -1966,6 +1967,33 @@ def create_memory(
     db.add(memory)
     db.commit()
     db.refresh(memory)
+
+    if send_to_telegram:
+        telegram_cred = (
+            db.query(SocialCredential)
+            .filter(SocialCredential.platform == "telegram")
+            .order_by(SocialCredential.created_at.desc())
+            .first()
+        )
+        if telegram_cred:
+            try:
+                extra = json.loads(telegram_cred.extra or "{}")
+                chat_id = extra.get("chat_id")
+                if chat_id:
+                    text = f"#memoria Mangiafuoco\n\n{caption or ''}\n\nRiassunto: {summary or ''}\n\nTag: {tags or ''}"
+                    if file_path and os.path.exists(file_path):
+                        url = f"https://api.telegram.org/bot{telegram_cred.access_token}/sendPhoto"
+                        with open(file_path, "rb") as f:
+                            files = {"photo": f}
+                            data = {"chat_id": chat_id, "caption": text, "parse_mode": "HTML"}
+                            requests.post(url, data=data, files=files, timeout=30)
+                    else:
+                        url = f"https://api.telegram.org/bot{telegram_cred.access_token}/sendMessage"
+                        data = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+                        requests.post(url, json=data, timeout=30)
+            except Exception as exc:
+                print("Send memory to telegram error:", exc)
+
     return memory
 
 

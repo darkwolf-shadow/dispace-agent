@@ -12,6 +12,7 @@ const btnNote = document.getElementById('btn-note');
 const btnSend = document.getElementById('btn-send');
 const btnCancel = document.getElementById('btn-cancel');
 const btnRefresh = document.getElementById('btn-refresh');
+const sendTelegram = document.getElementById('send-telegram');
 const statusEl = document.getElementById('status');
 const memoriesList = document.getElementById('memories-list');
 
@@ -36,6 +37,7 @@ function resetPreview() {
   videoPreview.src = '';
   captionInput.value = '';
   tagsInput.value = '';
+  if (sendTelegram) sendTelegram.checked = false;
   btnSend.disabled = true;
   setStatus('');
 }
@@ -146,6 +148,7 @@ async function sendMemory() {
   formData.append('caption', caption);
   formData.append('tags', tags);
   formData.append('source', 'mangiafuoco');
+  formData.append('send_to_telegram', sendTelegram.checked ? 'true' : 'false');
   if (currentBlob) {
     const ext = currentType === 'image' ? 'jpg' : 'webm';
     formData.append('file', currentBlob, `capture.${ext}`);

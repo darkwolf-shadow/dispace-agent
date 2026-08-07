@@ -118,6 +118,22 @@ button.secondary {
   color: #c62828;
 }
 
+label.inline {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+
+label.inline input[type="checkbox"] {
+  width: auto;
+}
+
+small {
+  color: #888;
+  font-size: 0.8rem;
+}
+
 #memories-list {
   list-style: none;
   padding: 0;
