@@ -39,7 +39,7 @@ main {
   margin: 0 auto;
 }
 
-.capture-card, .memories-card {
+.capture-card, .memories-card, .control-card {
   background: white;
   border-radius: 12px;
   padding: 1rem;

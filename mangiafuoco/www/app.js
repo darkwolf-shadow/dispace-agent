@@ -12,6 +12,7 @@ const captionInput = document.getElementById('caption');
 const tagsInput = document.getElementById('tags');
 const btnPhoto = document.getElementById('btn-photo');
 const btnAudio = document.getElementById('btn-audio');
+const btnSpeech = document.getElementById('btn-speech');
 const btnNote = document.getElementById('btn-note');
 const btnSend = document.getElementById('btn-send');
 const btnCancel = document.getElementById('btn-cancel');
@@ -24,6 +25,8 @@ const memoriesList = document.getElementById('memories-list');
 let currentBlob = null;
 let currentType = null;
 let mediaRecorder = null;
+
+const MangiafuocoControl = window.Capacitor && Capacitor.registerPlugin ? Capacitor.registerPlugin('MangiafuocoControl') : null;
 let audioChunks = [];
 let recordingStartTime = null;
 let recordingInterval = null;
@@ -243,12 +246,183 @@ async function loadMemories() {
   }
 }
 
+let speechListener = null;
+let isSpeechNative = false;
+
+async function startSpeech() {
+  const native = window.Capacitor && Capacitor.isNativePlatform();
+  if (native) {
+    try {
+      const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
+      if (!SpeechRecognition) throw new Error('Plugin SpeechRecognition non trovato. Esegui npx cap sync.');
+      isSpeechNative = true;
+      const perm = await SpeechRecognition.requestPermissions();
+      if (perm && perm.permission && perm.permission !== 'granted') {
+        setStatus('Permesso microfono negato per il riconoscimento vocale.', true);
+        return;
+      }
+      const { available } = await SpeechRecognition.available();
+      if (!available) {
+        setStatus('Riconoscimento vocale non disponibile su questo dispositivo.', true);
+        return;
+      }
+      setStatus('Ascolto... parla ora');
+      btnSpeech.textContent = 'Ferma';
+      btnSpeech.onclick = stopSpeech;
+      currentBlob = null;
+      currentType = 'note';
+      photoPreview.style.display = 'none';
+      audioPreview.style.display = 'none';
+      videoPreview.style.display = 'none';
+      btnSend.disabled = true;
+      captionInput.value = '';
+
+      speechListener = await SpeechRecognition.addListener('partialResults', (event) => {
+        const text = event.matches && event.matches[0] ? event.matches[0] : '';
+        if (text) captionInput.value = text;
+      });
+      await SpeechRecognition.start({ language: 'it-IT', partialResults: true, popup: false });
+    } catch (err) {
+      setStatus('Errore riconoscimento vocale: ' + err.message, true);
+      btnSpeech.textContent = 'Parla (testo)';
+      btnSpeech.onclick = startSpeech;
+    }
+  } else {
+    // Fallback Web Speech API for browser testing
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      setStatus('Riconoscimento vocale non supportato nel browser.', true);
+      return;
+    }
+    const recognition = new SR();
+    recognition.lang = 'it-IT';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map(r => r[0].transcript)
+        .join('');
+      captionInput.value = transcript;
+    };
+    recognition.onerror = (e) => setStatus('Errore: ' + e.error, true);
+    recognition.onend = () => {
+      currentType = 'note';
+      btnSend.disabled = false;
+      updatePreviewEmpty();
+      setStatus('Trascrizione completata.');
+      btnSpeech.textContent = 'Parla (testo)';
+      btnSpeech.onclick = startSpeech;
+    };
+    setStatus('Ascolto... parla ora');
+    currentType = 'note';
+    photoPreview.style.display = 'none';
+    audioPreview.style.display = 'none';
+    videoPreview.style.display = 'none';
+    recognition.start();
+    btnSpeech.textContent = 'Ferma';
+    btnSpeech.onclick = () => { recognition.stop(); };
+  }
+}
+
+async function stopSpeech() {
+  if (isSpeechNative) {
+    try {
+      const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
+      await SpeechRecognition.stop();
+      if (speechListener) {
+        await speechListener.remove();
+        speechListener = null;
+      }
+      setStatus('Trascrizione completata.');
+      currentType = 'note';
+      btnSend.disabled = false;
+      updatePreviewEmpty();
+    } catch (err) {
+      setStatus('Errore stop: ' + err.message, true);
+    }
+  }
+  btnSpeech.textContent = 'Parla (testo)';
+  btnSpeech.onclick = startSpeech;
+}
+
+const btnHotword = document.getElementById('btn-hotword');
+const btnStopHotword = document.getElementById('btn-stop-hotword');
+const btnOpenWhatsapp = document.getElementById('btn-open-whatsapp');
+const btnOpenSettings = document.getElementById('btn-open-settings');
+const btnUninstall = document.getElementById('btn-uninstall');
+const uninstallInput = document.getElementById('uninstall-package');
+const controlStatus = document.getElementById('control-status');
+
+function setControlStatus(msg, isError = false) {
+  if (controlStatus) {
+    controlStatus.textContent = msg;
+    controlStatus.className = 'status ' + (isError ? 'error' : '');
+  }
+}
+
+async function startHotword() {
+  if (!MangiafuocoControl) {
+    setControlStatus('Controllo telefono solo nell\\'app Android.', true);
+    return;
+  }
+  try {
+    await MangiafuocoControl.startHotword({ keyword: 'mangiafuoco' });
+    setControlStatus('In ascolto per "Mangiafuoco" in background.');
+    btnHotword.style.display = 'none';
+    btnStopHotword.style.display = 'inline-block';
+  } catch (err) {
+    setControlStatus('Errore: ' + err.message, true);
+  }
+}
+
+async function stopHotword() {
+  if (!MangiafuocoControl) return;
+  try {
+    await MangiafuocoControl.stopHotword();
+    setControlStatus('Ascolto fermato.');
+    btnHotword.style.display = 'inline-block';
+    btnStopHotword.style.display = 'none';
+  } catch (err) {
+    setControlStatus('Errore: ' + err.message, true);
+  }
+}
+
+async function openWhatsapp() {
+  if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
+  try { await MangiafuocoControl.openApp({ packageName: 'com.whatsapp' }); setControlStatus('Apertura WhatsApp...'); } catch (err) { setControlStatus(err.message, true); }
+}
+
+async function openSettings() {
+  if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
+  try { await MangiafuocoControl.openSettings({}); setControlStatus('Apertura impostazioni...'); } catch (err) { setControlStatus(err.message, true); }
+}
+
+async function uninstallPackage() {
+  if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
+  const pkg = uninstallInput && uninstallInput.value.trim();
+  if (!pkg) { setControlStatus('Inserisci un package name.', true); return; }
+  try { await MangiafuocoControl.uninstallApp({ packageName: pkg }); setControlStatus('Apertura dialogo disinstallazione...'); } catch (err) { setControlStatus(err.message, true); }
+}
+
+if (MangiafuocoControl && MangiafuocoControl.addListener) {
+  MangiafuocoControl.addListener('hotword', (event) => {
+    setControlStatus('Hotword rilevata: ' + event.keyword);
+    startSpeech();
+  });
+}
+
 btnPhoto.addEventListener('click', takePhoto);
 btnAudio.addEventListener('click', startRecording);
+btnSpeech.addEventListener('click', startSpeech);
 btnNote.addEventListener('click', addNote);
 btnSend.addEventListener('click', sendMemory);
 btnCancel.addEventListener('click', resetPreview);
 btnRefresh.addEventListener('click', loadMemories);
 if (btnClearPreview) btnClearPreview.addEventListener('click', resetPreview);
+if (btnHotword) btnHotword.addEventListener('click', startHotword);
+if (btnStopHotword) btnStopHotword.addEventListener('click', stopHotword);
+if (btnOpenWhatsapp) btnOpenWhatsapp.addEventListener('click', openWhatsapp);
+if (btnOpenSettings) btnOpenSettings.addEventListener('click', openSettings);
+if (btnUninstall) btnUninstall.addEventListener('click', uninstallPackage);
 
 loadMemories();
