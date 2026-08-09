@@ -26,7 +26,7 @@ let currentBlob = null;
 let currentType = null;
 let mediaRecorder = null;
 
-const MangiafuocoControl = window.Capacitor && Capacitor.registerPlugin ? Capacitor.registerPlugin('MangiafuocoControl') : null;
+const MangiafuocoControl = (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('MangiafuocoControl') : null;
 let audioChunks = [];
 let recordingStartTime = null;
 let recordingInterval = null;
@@ -64,10 +64,14 @@ function resetPreview() {
   updatePreviewEmpty();
 }
 
+function isNative() {
+  return typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+}
+
 async function takePhoto() {
   try {
     let blob = null;
-    if (window.Capacitor && Capacitor.isNativePlatform()) {
+    if (isNative()) {
       const { Camera } = await import('@capacitor/camera');
       const photo = await Camera.getPhoto({
         resultType: 'uri',
@@ -76,19 +80,24 @@ async function takePhoto() {
       });
       const res = await fetch(photo.webPath);
       blob = await res.blob();
+      if (blob) await showBlob(blob, 'image');
     } else {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
       input.capture = 'environment';
-      input.onchange = async () => {
-        blob = input.files[0];
-        await showBlob(blob, 'image');
-      };
+      input.style.position = 'absolute';
+      input.style.opacity = '0';
+      input.style.pointerEvents = 'none';
+      document.body.appendChild(input);
+      input.addEventListener('change', async () => {
+        if (input.files && input.files[0]) {
+          await showBlob(input.files[0], 'image');
+        }
+        document.body.removeChild(input);
+      }, { once: true });
       input.click();
-      return;
     }
-    if (blob) await showBlob(blob, 'image');
   } catch (err) {
     setStatus('Errore fotocamera: ' + err.message, true);
   }
@@ -125,16 +134,39 @@ function formatTime(ms) {
   return `${m}:${s}`;
 }
 
+function getSupportedMimeType() {
+  const types = ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg'];
+  if (typeof MediaRecorder === 'undefined') return null;
+  for (const t of types) {
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return null;
+}
+
 async function startRecording() {
   try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Microfono non supportato in questo browser.');
+    }
+    if (typeof MediaRecorder === 'undefined') {
+      throw new Error('Registrazione audio non supportata su questo dispositivo. Prova dall\'app Android.');
+    }
+    const mimeType = getSupportedMimeType();
+    if (!mimeType) {
+      throw new Error('Nessun formato audio supportato dal browser.');
+    }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
     audioChunks = [];
     mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
     mediaRecorder.onstop = async () => {
-      const blob = new Blob(audioChunks, { type: 'audio/webm' });
+      const blob = new Blob(audioChunks, { type: mimeType });
       await showBlob(blob, 'audio');
       stream.getTracks().forEach(t => t.stop());
+      stopRecordingUI();
+    };
+    mediaRecorder.onerror = (e) => {
+      setStatus('Errore registrazione: ' + e.message, true);
       stopRecordingUI();
     };
     mediaRecorder.start(1000);
@@ -250,7 +282,7 @@ let speechListener = null;
 let isSpeechNative = false;
 
 async function startSpeech() {
-  const native = window.Capacitor && Capacitor.isNativePlatform();
+  const native = isNative();
   if (native) {
     try {
       const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
@@ -414,7 +446,7 @@ async function executeCommand(text) {
 }
 
 async function startVoiceCommand() {
-  if (!window.Capacitor) { setControlStatus('Comandi vocali solo nell\\'app Android.', true); return; }
+  if (!isNative()) { setControlStatus('Comandi vocali solo nell\'app Android.', true); return; }
   try {
     const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
     if (!SpeechRecognition) throw new Error('Plugin SpeechRecognition non trovato.');
@@ -448,7 +480,7 @@ async function startVoiceCommand() {
 }
 
 async function stopVoiceCommand() {
-  if (!window.Capacitor) return;
+  if (!isNative()) return;
   try {
     const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
     if (voiceCommandListener) {
@@ -533,9 +565,8 @@ if (btnOpenSettings) btnOpenSettings.addEventListener('click', openSettings);
 if (btnUninstall) btnUninstall.addEventListener('click', uninstallPackage);
 
 if (btnVoiceCommand) {
-  const isNative = window.Capacitor && Capacitor.isNativePlatform();
-  const start = (e) => { e.preventDefault(); if (isNative) startVoiceCommand(); else startBrowserVoiceCommand(); };
-  const stop = (e) => { e.preventDefault(); if (isNative) stopVoiceCommand(); else stopBrowserVoiceCommand(); };
+  const start = (e) => { e.preventDefault(); if (isNative()) startVoiceCommand(); else startBrowserVoiceCommand(); };
+  const stop = (e) => { e.preventDefault(); if (isNative()) stopVoiceCommand(); else stopBrowserVoiceCommand(); };
   btnVoiceCommand.addEventListener('pointerdown', start);
   btnVoiceCommand.addEventListener('pointerup', stop);
   btnVoiceCommand.addEventListener('pointerleave', stop);
