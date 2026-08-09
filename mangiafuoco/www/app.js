@@ -345,8 +345,7 @@ async function stopSpeech() {
   btnSpeech.onclick = startSpeech;
 }
 
-const btnHotword = document.getElementById('btn-hotword');
-const btnStopHotword = document.getElementById('btn-stop-hotword');
+const btnVoiceCommand = document.getElementById('btn-voice-command');
 const btnOpenWhatsapp = document.getElementById('btn-open-whatsapp');
 const btnOpenSettings = document.getElementById('btn-open-settings');
 const btnUninstall = document.getElementById('btn-uninstall');
@@ -360,30 +359,147 @@ function setControlStatus(msg, isError = false) {
   }
 }
 
-async function startHotword() {
-  if (!MangiafuocoControl) {
-    setControlStatus('Controllo telefono solo nell\\'app Android.', true);
-    return;
-  }
-  try {
-    await MangiafuocoControl.startHotword({ keyword: 'mangiafuoco' });
-    setControlStatus('In ascolto per "Mangiafuoco" in background.');
-    btnHotword.style.display = 'none';
-    btnStopHotword.style.display = 'inline-block';
-  } catch (err) {
-    setControlStatus('Errore: ' + err.message, true);
+let voiceCommandListener = null;
+let voiceCommandRecognizer = null;
+
+function normalizeText(text) {
+  return text.toLowerCase()
+    .replace(/[^a-zàèéìòù0-9\s]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function executeCommand(text) {
+  const cmd = normalizeText(text);
+  setControlStatus('Comando: "' + cmd + '"');
+
+  if (cmd.includes('whatsapp')) {
+    if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
+    await MangiafuocoControl.openApp({ packageName: 'com.whatsapp' });
+    setControlStatus('Apertura WhatsApp...');
+  } else if (cmd.includes('telegram')) {
+    if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
+    await MangiafuocoControl.openApp({ packageName: 'org.telegram.messenger' });
+    setControlStatus('Apertura Telegram...');
+  } else if (cmd.includes('impostazioni') || cmd.includes('opzioni')) {
+    if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
+    await MangiafuocoControl.openSettings({});
+    setControlStatus('Apertura Impostazioni...');
+  } else if (cmd.includes('foto') || cmd.includes('scatta')) {
+    await takePhoto();
+    setControlStatus('Scatto foto...');
+  } else if (cmd.includes('registra') || cmd.includes('audio')) {
+    await startRecording();
+    setControlStatus('Registrazione audio...');
+  } else if (cmd.includes('nota') || cmd.includes('scrivi')) {
+    addNote();
+    captionInput.focus();
+    setControlStatus('Pronto per la nota.');
+  } else if (cmd.includes('disinstalla') || cmd.includes('elimina')) {
+    if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
+    const words = cmd.split(' ');
+    const idx = words.findIndex(w => w === 'disinstalla' || w === 'elimina');
+    const pkg = words.slice(idx + 1).join(' ').trim();
+    if (pkg) {
+      await MangiafuocoControl.uninstallApp({ packageName: pkg.replace(/\s/g, '') });
+      setControlStatus('Apertura dialogo disinstallazione per ' + pkg);
+    } else {
+      setControlStatus('Ripeti: "disinstalla" seguito dal package name.', true);
+    }
+  } else if (cmd.includes('mangiafuoco') || cmd.includes('apri')) {
+    setControlStatus('Sono qui. Cosa facciamo?');
+  } else {
+    setControlStatus('Comando non riconosciuto: "' + cmd + '"', true);
   }
 }
 
-async function stopHotword() {
-  if (!MangiafuocoControl) return;
+async function startVoiceCommand() {
+  if (!window.Capacitor) { setControlStatus('Comandi vocali solo nell\\'app Android.', true); return; }
   try {
-    await MangiafuocoControl.stopHotword();
-    setControlStatus('Ascolto fermato.');
-    btnHotword.style.display = 'inline-block';
-    btnStopHotword.style.display = 'none';
+    const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
+    if (!SpeechRecognition) throw new Error('Plugin SpeechRecognition non trovato.');
+
+    const perm = await SpeechRecognition.requestPermissions();
+    if (perm && perm.permission && perm.permission !== 'granted') {
+      setControlStatus('Permesso microfono negato.', true);
+      return;
+    }
+    const { available } = await SpeechRecognition.available();
+    if (!available) {
+      setControlStatus('Riconoscimento vocale non disponibile.', true);
+      return;
+    }
+
+    setControlStatus('Tieni premuto e parla...');
+    btnVoiceCommand.textContent = 'Sto ascoltando...';
+    btnVoiceCommand.classList.add('listening');
+
+    voiceCommandListener = await SpeechRecognition.addListener('partialResults', (event) => {
+      const text = event.matches && event.matches[0] ? event.matches[0] : '';
+      if (text) setControlStatus('Ascolto: ' + text);
+    });
+
+    await SpeechRecognition.start({ language: 'it-IT', partialResults: true, popup: false });
   } catch (err) {
     setControlStatus('Errore: ' + err.message, true);
+    btnVoiceCommand.textContent = 'Tieni premuto: comando vocale';
+    btnVoiceCommand.classList.remove('listening');
+  }
+}
+
+async function stopVoiceCommand() {
+  if (!window.Capacitor) return;
+  try {
+    const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
+    if (voiceCommandListener) {
+      await voiceCommandListener.remove();
+      voiceCommandListener = null;
+    }
+    const result = await SpeechRecognition.stop();
+    const text = result && result.matches && result.matches[0] ? result.matches[0] : '';
+    if (text) {
+      setControlStatus('Hai detto: ' + text);
+      await executeCommand(text);
+    } else {
+      setControlStatus('Nessun comando rilevato.');
+    }
+  } catch (err) {
+    setControlStatus('Errore stop: ' + err.message, true);
+  }
+  btnVoiceCommand.textContent = 'Tieni premuto: comando vocale';
+  btnVoiceCommand.classList.remove('listening');
+}
+
+// Browser fallback for voice command (hold button + Web Speech API)
+function startBrowserVoiceCommand() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { setControlStatus('Riconoscimento vocale non supportato.', true); return; }
+  voiceCommandRecognizer = new SR();
+  voiceCommandRecognizer.lang = 'it-IT';
+  voiceCommandRecognizer.interimResults = true;
+  voiceCommandRecognizer.continuous = false;
+  voiceCommandRecognizer.onerror = (e) => setControlStatus('Errore: ' + e.error, true);
+  voiceCommandRecognizer.onend = async () => {
+    const text = voiceCommandRecognizer && voiceCommandRecognizer.lastResult ? voiceCommandRecognizer.lastResult : '';
+    if (text) await executeCommand(text);
+    btnVoiceCommand.textContent = 'Tieni premuto: comando vocale';
+    btnVoiceCommand.classList.remove('listening');
+  };
+  voiceCommandRecognizer.onresult = (e) => {
+    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+    voiceCommandRecognizer.lastResult = transcript;
+    setControlStatus('Ascolto: ' + transcript);
+  };
+  voiceCommandRecognizer.start();
+  btnVoiceCommand.textContent = 'Sto ascoltando...';
+  btnVoiceCommand.classList.add('listening');
+  setControlStatus('Tieni premuto e parla...');
+}
+
+function stopBrowserVoiceCommand() {
+  if (voiceCommandRecognizer) {
+    voiceCommandRecognizer.stop();
+    voiceCommandRecognizer = null;
   }
 }
 
@@ -404,13 +520,6 @@ async function uninstallPackage() {
   try { await MangiafuocoControl.uninstallApp({ packageName: pkg }); setControlStatus('Apertura dialogo disinstallazione...'); } catch (err) { setControlStatus(err.message, true); }
 }
 
-if (MangiafuocoControl && MangiafuocoControl.addListener) {
-  MangiafuocoControl.addListener('hotword', (event) => {
-    setControlStatus('Hotword rilevata: ' + event.keyword);
-    startSpeech();
-  });
-}
-
 btnPhoto.addEventListener('click', takePhoto);
 btnAudio.addEventListener('click', startRecording);
 btnSpeech.addEventListener('click', startSpeech);
@@ -419,10 +528,18 @@ btnSend.addEventListener('click', sendMemory);
 btnCancel.addEventListener('click', resetPreview);
 btnRefresh.addEventListener('click', loadMemories);
 if (btnClearPreview) btnClearPreview.addEventListener('click', resetPreview);
-if (btnHotword) btnHotword.addEventListener('click', startHotword);
-if (btnStopHotword) btnStopHotword.addEventListener('click', stopHotword);
 if (btnOpenWhatsapp) btnOpenWhatsapp.addEventListener('click', openWhatsapp);
 if (btnOpenSettings) btnOpenSettings.addEventListener('click', openSettings);
 if (btnUninstall) btnUninstall.addEventListener('click', uninstallPackage);
+
+if (btnVoiceCommand) {
+  const isNative = window.Capacitor && Capacitor.isNativePlatform();
+  const start = (e) => { e.preventDefault(); if (isNative) startVoiceCommand(); else startBrowserVoiceCommand(); };
+  const stop = (e) => { e.preventDefault(); if (isNative) stopVoiceCommand(); else stopBrowserVoiceCommand(); };
+  btnVoiceCommand.addEventListener('pointerdown', start);
+  btnVoiceCommand.addEventListener('pointerup', stop);
+  btnVoiceCommand.addEventListener('pointerleave', stop);
+  btnVoiceCommand.addEventListener('pointercancel', stop);
+}
 
 loadMemories();
