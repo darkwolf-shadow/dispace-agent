@@ -28,7 +28,12 @@ let mediaRecorder = null;
 let audioChunks = [];
 let recordingStartTime = null;
 let recordingInterval = null;
+let isAudioRecording = false;
+let isSpeechListening = false;
 let isNativeAudioRecording = false;
+let speechListener = null;
+let voiceCommandListener = null;
+let voiceCommandRecognizer = null;
 
 const MAX_RECORDING_SECONDS = 60;
 
@@ -39,7 +44,8 @@ function isNative() {
 function getNativePlugin(name) {
   if (!isNative()) return null;
   const cap = window.Capacitor;
-  if (cap.Plugins && cap.Plugins[name]) return cap.Plugins[name];
+  const plugins = cap.Plugins || {};
+  if (plugins[name]) return plugins[name];
   if (typeof cap.registerPlugin === 'function') return cap.registerPlugin(name);
   return null;
 }
@@ -92,7 +98,7 @@ async function takePhoto() {
     let blob = null;
     if (isNative()) {
       const Camera = getNativePlugin('Camera');
-      if (!Camera) throw new Error('Plugin fotocamera non trovato. Esegui npx cap sync.');
+      if (!Camera) throw new Error('Plugin fotocamera non trovato. Esegui npx cap sync e ricompila l\'app.');
       const photo = await Camera.getPhoto({
         resultType: 'uri',
         source: 'CAMERA',
@@ -166,6 +172,14 @@ function getSupportedMimeType() {
   return null;
 }
 
+async function toggleAudio() {
+  if (isAudioRecording) {
+    await stopRecording();
+  } else {
+    await startRecording();
+  }
+}
+
 async function startRecording() {
   try {
     if (isNative()) {
@@ -177,6 +191,7 @@ async function startRecording() {
       if (!perm || !perm.value) throw new Error('Permesso microfono negato. Abilitalo nelle impostazioni dell\'app.');
       await VoiceRecorder.startRecording();
       isNativeAudioRecording = true;
+      isAudioRecording = true;
       startRecordingUI();
       return;
     }
@@ -199,25 +214,26 @@ async function startRecording() {
       const blob = new Blob(audioChunks, { type: mimeType });
       await showBlob(blob, 'audio');
       stream.getTracks().forEach(t => t.stop());
-      stopRecordingUI();
     };
     mediaRecorder.onerror = (e) => {
       setStatus('Errore registrazione: ' + e.message, true);
-      stopRecordingUI();
     };
     mediaRecorder.start(1000);
     isNativeAudioRecording = false;
+    isAudioRecording = true;
     startRecordingUI();
   } catch (err) {
+    isAudioRecording = false;
     setStatus('Errore microfono: ' + err.message, true);
+    stopRecordingUI();
   }
 }
 
 async function stopRecording() {
   try {
-    if (isNative()) {
+    if (isNative() && isNativeAudioRecording) {
       const VoiceRecorder = getNativePlugin('VoiceRecorder');
-      if (!VoiceRecorder) return;
+      if (!VoiceRecorder) throw new Error('Registratore audio nativo non trovato.');
       const result = await VoiceRecorder.stopRecording();
       const value = result && result.value ? result.value : {};
       if (value.recordDataBase64) {
@@ -237,6 +253,8 @@ async function stopRecording() {
   } catch (err) {
     setStatus('Errore arresto registrazione: ' + err.message, true);
   }
+  isAudioRecording = false;
+  isNativeAudioRecording = false;
   stopRecordingUI();
 }
 
@@ -246,7 +264,6 @@ function startRecordingUI() {
   recordingTimer.textContent = '00:00';
   recordingProgress.style.width = '0%';
   btnAudio.textContent = 'Ferma registrazione';
-  btnAudio.onclick = stopRecording;
   setStatus('Registrazione in corso...');
   recordingInterval = setInterval(() => {
     const elapsed = Date.now() - recordingStartTime;
@@ -264,8 +281,9 @@ function stopRecordingUI() {
   recordingInterval = null;
   recordingIndicator.style.display = 'none';
   btnAudio.textContent = 'Registra audio';
-  btnAudio.onclick = startRecording;
-  setStatus('Registrazione completata.');
+  if (!statusEl.className.includes('error')) {
+    setStatus('Registrazione completata.');
+  }
 }
 
 function addNote() {
@@ -349,27 +367,31 @@ async function loadMemories() {
   }
 }
 
-let speechListener = null;
+async function toggleSpeech() {
+  if (isSpeechListening) {
+    await stopSpeech();
+  } else {
+    await startSpeech();
+  }
+}
 
 async function startSpeech() {
   try {
+    isSpeechListening = true;
+    btnSpeech.textContent = 'Ferma';
     if (isNative()) {
       const SpeechRecognition = getNativePlugin('SpeechRecognition');
       if (!SpeechRecognition) throw new Error('Plugin riconoscimento vocale non trovato. Esegui npx cap sync.');
       const perm = await SpeechRecognition.requestPermissions();
       const status = perm && (perm.speechRecognition || perm.permission);
       if (status && status !== 'granted') {
-        setStatus('Permesso microfono negato per la dettatura.', true);
-        return;
+        throw new Error('Permesso microfono negato per la dettatura.');
       }
       const available = await SpeechRecognition.available();
       if (!available || !available.available) {
-        setStatus('Riconoscimento vocale non disponibile su questo dispositivo.', true);
-        return;
+        throw new Error('Riconoscimento vocale non disponibile su questo dispositivo.');
       }
       setStatus('Ascolto... parla ora');
-      btnSpeech.textContent = 'Ferma';
-      btnSpeech.onclick = stopSpeech;
       currentBlob = null;
       currentType = 'note';
       photoPreview.style.display = 'none';
@@ -386,8 +408,7 @@ async function startSpeech() {
     } else {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) {
-        setStatus('Riconoscimento vocale non supportato nel browser.', true);
-        return;
+        throw new Error('Riconoscimento vocale non supportato nel browser.');
       }
       const recognition = new SR();
       recognition.lang = 'it-IT';
@@ -401,12 +422,12 @@ async function startSpeech() {
       };
       recognition.onerror = (e) => setStatus('Errore: ' + e.error, true);
       recognition.onend = () => {
+        isSpeechListening = false;
+        btnSpeech.textContent = 'Dettatura vocale';
         currentType = 'note';
         btnSend.disabled = false;
         updatePreviewEmpty();
         setStatus('Trascrizione completata.');
-        btnSpeech.textContent = 'Dettatura vocale';
-        btnSpeech.onclick = startSpeech;
       };
       setStatus('Ascolto... parla ora');
       currentType = 'note';
@@ -414,13 +435,11 @@ async function startSpeech() {
       audioPreview.style.display = 'none';
       videoPreview.style.display = 'none';
       recognition.start();
-      btnSpeech.textContent = 'Ferma';
-      btnSpeech.onclick = () => { recognition.stop(); };
     }
   } catch (err) {
-    setStatus('Errore riconoscimento vocale: ' + err.message, true);
+    isSpeechListening = false;
     btnSpeech.textContent = 'Dettatura vocale';
-    btnSpeech.onclick = startSpeech;
+    setStatus('Errore riconoscimento vocale: ' + err.message, true);
   }
 }
 
@@ -439,12 +458,12 @@ async function stopSpeech() {
   } catch (err) {
     setStatus('Errore stop: ' + err.message, true);
   }
+  isSpeechListening = false;
+  btnSpeech.textContent = 'Dettatura vocale';
   setStatus('Trascrizione completata.');
   currentType = 'note';
   btnSend.disabled = false;
   updatePreviewEmpty();
-  btnSpeech.textContent = 'Dettatura vocale';
-  btnSpeech.onclick = startSpeech;
 }
 
 const btnVoiceCommand = document.getElementById('btn-voice-command');
@@ -460,9 +479,6 @@ function setControlStatus(msg, isError = false) {
     controlStatus.className = 'status ' + (isError ? 'error' : '');
   }
 }
-
-let voiceCommandListener = null;
-let voiceCommandRecognizer = null;
 
 function normalizeText(text) {
   return text.toLowerCase()
@@ -638,8 +654,8 @@ async function uninstallPackage() {
 }
 
 btnPhoto.addEventListener('click', takePhoto);
-btnAudio.addEventListener('click', startRecording);
-btnSpeech.addEventListener('click', startSpeech);
+btnAudio.addEventListener('click', toggleAudio);
+btnSpeech.addEventListener('click', toggleSpeech);
 btnNote.addEventListener('click', addNote);
 btnSend.addEventListener('click', sendMemory);
 btnCancel.addEventListener('click', resetPreview);
