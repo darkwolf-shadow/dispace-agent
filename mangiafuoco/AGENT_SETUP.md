@@ -6,7 +6,7 @@ Questa guida serve a un agente (Devin Web, Devin locale, Claude, ecc.) per insta
 
 - Windows, macOS o Linux con almeno 8 GB di RAM.
 - Connessione internet.
-- Repo `darkwolf-shadow/dispace-agent`, branch `step3-marketing`.
+- Repo `darkwolf-shadow/dispace-agent`, branch `master`.
 
 ## 1. Clona il repo
 
@@ -17,22 +17,22 @@ cd dispace-agent/mangiafuoco
 
 ## 2. Installa Node.js e npm
 
-Usa la versione LTS consigliata: Node 20.
+Usa la versione LTS richiesta: Node 22 (Capacitor 8.5+ richiede Node >= 22).
 
-- Windows: scarica da https://nodejs.org/dist/v20.19.0/node-v20.19.0-x64.msi
-- macOS/Linux: usare `nvm` o il package manager di sistema.
+- Windows: scarica da https://nodejs.org/dist/v22.18.0/node-v22.18.0-x64.msi
+- macOS/Linux: usare `nvm` o il package manager di sistema (`nvm install 22`).
 
 Verifica:
 
 ```bash
-node -v
+node -v   # deve essere v22.x
 npm -v
 ```
 
 ## 3. Installa dipendenze Capacitor
 
 ```bash
-npm install
+npm install --legacy-peer-deps
 ```
 
 ## 4. Installa Android Studio
@@ -50,6 +50,8 @@ npm install
 npx cap sync
 ```
 
+Se da errori di permessi o di `minSdk`, controlla che `mangiafuoco/android/variables.gradle` abbia `minSdkVersion = 24`.
+
 ## 6. Apri il progetto in Android Studio
 
 ```bash
@@ -62,9 +64,10 @@ Se `npx cap open` non funziona, apri manualmente la cartella `mangiafuoco/androi
 
 Da Android Studio:
 
-1. Attendi il sync Gradle.
-2. Menu: **Build → Build Bundle(s) / APK(s) → Build APK(s)**.
-3. L'APK finisce in `mangiafuoco/android/app/build/outputs/apk/debug/app-debug.apk`.
+1. Se Gradle chiede di aggiornare Android Gradle Plugin (AGP), accetta.
+2. Attendi il sync Gradle (scarica le dipendenze al primo avvio).
+3. Menu: **Build → Build Bundle(s) / APK(s) → Build APK(s)**.
+4. L'APK finisce in `mangiafuoco/android/app/build/outputs/apk/debug/app-debug.apk`.
 
 Da terminale (dentro `mangiafuoco/android`):
 
@@ -117,14 +120,14 @@ Poi builda e reinstalla l'APK.
 
 ## Note
 
-- **Nessun servizio in background**: l'app non ascolta continuamente. Il microfono si attiva solo mentre tieni premuto il pulsante **"Tieni premuto: comando vocale"**.
+- **Nessun servizio in background**: l'app non ascolta continuamente. Il microfono si attiva solo mentre premi e tieni premuto il pulsante **"Comando vocale (tieni premuto)"**.
 - Permessi richiesti dall'app:
-  - Microfono (per comando vocale e registrazione)
-  - Fotocamera
-  - Posizione
-  - Cerca app installate (per aprire app come WhatsApp)
-- Dopo l'installazione, apri l'app e concedi i permessi.
-- Per i comandi vocali: tieni premuto il pulsante, pronuncia una frase chiave (es. "apri WhatsApp", "foto", "impostazioni"), rilascia.
-- Per disinstallare app o aprire impostazioni usa i pulsanti nella sezione **Controllo telefono**.
+  - **Microfono** (per registrazione audio, dettatura e comando vocale)
+  - **Fotocamera** (per scattare foto)
+  - **Posizione** (opzionale, per geotag nelle memorie)
+  - **Cerca app installate** (`QUERY_ALL_PACKAGES`, per aprire app come WhatsApp e gestire il telefono)
+- Dopo l'installazione, apri l'app e concedi tutti i permessi richiesti.
+- **Comandi vocali**: tieni premuto il pulsante "Comando vocale", pronuncia una frase chiave (es. "apri WhatsApp", "foto", "impostazioni"), rilascia.
+- **Disinstalla app**: inserisci il *package name* (es. `com.facebook.katana`) e premi il pulsante corrispondente.
 - Se Gradle chiede di accettare licenze, esegui `sdkmanager --licenses` dalla cartella `sdk`.
-- Se Android Studio segnala errori su Java, imposta JDK 17 in **File → Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK**.
+- Se Android Studio segnala errori su Java, imposta JDK 21 in **File → Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK** (il plugin voice recorder richiede Java 21).

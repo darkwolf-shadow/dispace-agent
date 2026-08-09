@@ -5,8 +5,11 @@ project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/
 include ':capacitor-camera'
 project(':capacitor-camera').projectDir = new File('../node_modules/@capacitor/camera/android')
 
+include ':capacitor-filesystem'
+project(':capacitor-filesystem').projectDir = new File('../node_modules/@capacitor/filesystem/android')
+
 include ':capgo-capacitor-speech-recognition'
 project(':capgo-capacitor-speech-recognition').projectDir = new File('../node_modules/@capgo/capacitor-speech-recognition/android')
 
-include ':capacitor-voice-recorder'
-project(':capacitor-voice-recorder').projectDir = new File('../node_modules/capacitor-voice-recorder/android')
+include ':independo-capacitor-voice-recorder'
+project(':independo-capacitor-voice-recorder').projectDir = new File('../node_modules/@independo/capacitor-voice-recorder/android')
