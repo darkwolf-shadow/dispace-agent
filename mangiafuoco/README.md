@@ -67,7 +67,13 @@ L'app si appoggia al backend DiSpace su Railway:
 
 ## Prossimi passi
 
-- Aggiungere ricerca semantica sulle memorie.
-- Integrare invio diretto al bot Telegram.
-- Elaborazione audio locale per ridurre i dati inviati.
-- Possibilità di ospitare un piccolo agente in locale sul telefono.
+- [x] Integrare invio diretto al bot Telegram.
+- [ ] Ricerca semantica sulle memorie.
+- [ ] Hotword "Hey Mangiafuoco" e comandi vocali.
+- [ ] Elaborazione audio locale per ridurre i dati inviati.
+- [ ] Possibilità di ospitare un piccolo agente in locale sul telefono.
+
+## Documentazione per sviluppatori e agenti
+
+- `AGENT_SETUP.md` — guida completa per installare Android Studio e buildare l'APK.
+- `VOICE_AND_CONTROL.md` — architettura per hotword, comandi vocali e controllo del telefono, con i limiti tecnici.

@@ -12,6 +12,7 @@ const captionInput = document.getElementById('caption');
 const tagsInput = document.getElementById('tags');
 const btnPhoto = document.getElementById('btn-photo');
 const btnAudio = document.getElementById('btn-audio');
+const btnSpeech = document.getElementById('btn-speech');
 const btnNote = document.getElementById('btn-note');
 const btnSend = document.getElementById('btn-send');
 const btnCancel = document.getElementById('btn-cancel');
@@ -243,8 +244,108 @@ async function loadMemories() {
   }
 }
 
+let speechListener = null;
+let isSpeechNative = false;
+
+async function startSpeech() {
+  const native = window.Capacitor && Capacitor.isNativePlatform();
+  if (native) {
+    try {
+      const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
+      if (!SpeechRecognition) throw new Error('Plugin SpeechRecognition non trovato. Esegui npx cap sync.');
+      isSpeechNative = true;
+      const perm = await SpeechRecognition.requestPermissions();
+      if (perm && perm.permission && perm.permission !== 'granted') {
+        setStatus('Permesso microfono negato per il riconoscimento vocale.', true);
+        return;
+      }
+      const { available } = await SpeechRecognition.available();
+      if (!available) {
+        setStatus('Riconoscimento vocale non disponibile su questo dispositivo.', true);
+        return;
+      }
+      setStatus('Ascolto... parla ora');
+      btnSpeech.textContent = 'Ferma';
+      btnSpeech.onclick = stopSpeech;
+      currentBlob = null;
+      currentType = 'note';
+      photoPreview.style.display = 'none';
+      audioPreview.style.display = 'none';
+      videoPreview.style.display = 'none';
+      btnSend.disabled = true;
+      captionInput.value = '';
+
+      speechListener = await SpeechRecognition.addListener('partialResults', (event) => {
+        const text = event.matches && event.matches[0] ? event.matches[0] : '';
+        if (text) captionInput.value = text;
+      });
+      await SpeechRecognition.start({ language: 'it-IT', partialResults: true, popup: false });
+    } catch (err) {
+      setStatus('Errore riconoscimento vocale: ' + err.message, true);
+      btnSpeech.textContent = 'Parla (testo)';
+      btnSpeech.onclick = startSpeech;
+    }
+  } else {
+    // Fallback Web Speech API for browser testing
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      setStatus('Riconoscimento vocale non supportato nel browser.', true);
+      return;
+    }
+    const recognition = new SR();
+    recognition.lang = 'it-IT';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map(r => r[0].transcript)
+        .join('');
+      captionInput.value = transcript;
+    };
+    recognition.onerror = (e) => setStatus('Errore: ' + e.error, true);
+    recognition.onend = () => {
+      currentType = 'note';
+      btnSend.disabled = false;
+      updatePreviewEmpty();
+      setStatus('Trascrizione completata.');
+      btnSpeech.textContent = 'Parla (testo)';
+      btnSpeech.onclick = startSpeech;
+    };
+    setStatus('Ascolto... parla ora');
+    currentType = 'note';
+    photoPreview.style.display = 'none';
+    audioPreview.style.display = 'none';
+    videoPreview.style.display = 'none';
+    recognition.start();
+    btnSpeech.textContent = 'Ferma';
+    btnSpeech.onclick = () => { recognition.stop(); };
+  }
+}
+
+async function stopSpeech() {
+  if (isSpeechNative) {
+    try {
+      const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
+      await SpeechRecognition.stop();
+      if (speechListener) {
+        await speechListener.remove();
+        speechListener = null;
+      }
+      setStatus('Trascrizione completata.');
+      currentType = 'note';
+      btnSend.disabled = false;
+      updatePreviewEmpty();
+    } catch (err) {
+      setStatus('Errore stop: ' + err.message, true);
+    }
+  }
+  btnSpeech.textContent = 'Parla (testo)';
+  btnSpeech.onclick = startSpeech;
+}
+
 btnPhoto.addEventListener('click', takePhoto);
 btnAudio.addEventListener('click', startRecording);
+btnSpeech.addEventListener('click', startSpeech);
 btnNote.addEventListener('click', addNote);
 btnSend.addEventListener('click', sendMemory);
 btnCancel.addEventListener('click', resetPreview);
