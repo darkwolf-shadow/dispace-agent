@@ -240,8 +240,9 @@ async function stopRecording() {
         const mimeType = value.mimeType || 'audio/aac';
         const blob = base64ToBlob(value.recordDataBase64, mimeType);
         await showBlob(blob, 'audio');
-      } else if (value.path) {
-        const res = await fetch(value.path);
+      } else if (value.uri || value.path) {
+        const fileUrl = value.uri || value.path;
+        const res = await fetch(fileUrl);
         const blob = await res.blob();
         await showBlob(blob, 'audio');
       } else {
