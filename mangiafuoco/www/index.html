@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#d94f0e">
   <title>Mangiafuoco</title>
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
   <header>
@@ -35,9 +38,9 @@
       <div class="actions">
         <button id="btn-photo">Scatta foto</button>
         <button id="btn-audio">Registra audio</button>
-        <button id="btn-speech">Parla (testo)</button>
-        <button id="btn-note">Nota testuale</button>
-        <button id="btn-clear-preview" class="secondary" style="display:none;">Cancella cattura</button>
+        <button id="btn-speech">Dettatura vocale</button>
+        <button id="btn-note">Scrivi nota</button>
+        <button id="btn-clear-preview" class="secondary" style="display:none;">Cancella</button>
       </div>
 
       <label>Descrivi cosa stai catturando
@@ -64,7 +67,7 @@
 
     <section class="control-card">
       <h2>Controllo telefono</h2>
-      <p>Funzioni attive solo nell'app Android nativa. Comando vocale: tieni premuto, parla, rilascia.</p>
+      <p>Da qui, solo nell'app Android, puoi aprire WhatsApp, le Impostazioni o disinstallare un'app usando il package name.</p>
       <div class="actions">
         <button id="btn-voice-command" class="secondary">Tieni premuto: comando vocale</button>
       </div>
@@ -86,6 +89,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

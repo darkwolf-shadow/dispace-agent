@@ -25,13 +25,26 @@ const memoriesList = document.getElementById('memories-list');
 let currentBlob = null;
 let currentType = null;
 let mediaRecorder = null;
-
-const MangiafuocoControl = (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('MangiafuocoControl') : null;
 let audioChunks = [];
 let recordingStartTime = null;
 let recordingInterval = null;
+let isNativeAudioRecording = false;
 
 const MAX_RECORDING_SECONDS = 60;
+
+function isNative() {
+  return typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
+}
+
+function getNativePlugin(name) {
+  if (!isNative()) return null;
+  const cap = window.Capacitor;
+  if (cap.Plugins && cap.Plugins[name]) return cap.Plugins[name];
+  if (typeof cap.registerPlugin === 'function') return cap.registerPlugin(name);
+  return null;
+}
+
+const MangiafuocoControl = getNativePlugin('MangiafuocoControl');
 
 function setStatus(msg, isError = false) {
   statusEl.textContent = msg;
@@ -64,20 +77,28 @@ function resetPreview() {
   updatePreviewEmpty();
 }
 
-function isNative() {
-  return typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+function base64ToBlob(base64, mimeType) {
+  const byteString = atob(base64);
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  return new Blob([ab], { type: mimeType });
 }
 
 async function takePhoto() {
   try {
     let blob = null;
     if (isNative()) {
-      const { Camera } = await import('@capacitor/camera');
+      const Camera = getNativePlugin('Camera');
+      if (!Camera) throw new Error('Plugin fotocamera non trovato. Esegui npx cap sync.');
       const photo = await Camera.getPhoto({
         resultType: 'uri',
         source: 'CAMERA',
         quality: 85,
       });
+      if (!photo || !photo.webPath) throw new Error('Nessuna foto catturata.');
       const res = await fetch(photo.webPath);
       blob = await res.blob();
       if (blob) await showBlob(blob, 'image');
@@ -86,13 +107,15 @@ async function takePhoto() {
       input.type = 'file';
       input.accept = 'image/*';
       input.capture = 'environment';
-      input.style.position = 'absolute';
+      input.style.position = 'fixed';
       input.style.opacity = '0';
-      input.style.pointerEvents = 'none';
+      input.style.top = '-1000px';
+      input.style.left = '-1000px';
       document.body.appendChild(input);
-      input.addEventListener('change', async () => {
-        if (input.files && input.files[0]) {
-          await showBlob(input.files[0], 'image');
+      input.addEventListener('change', async (ev) => {
+        const files = ev.target.files || input.files;
+        if (files && files[0]) {
+          await showBlob(files[0], 'image');
         }
         document.body.removeChild(input);
       }, { once: true });
@@ -145,6 +168,19 @@ function getSupportedMimeType() {
 
 async function startRecording() {
   try {
+    if (isNative()) {
+      const VoiceRecorder = getNativePlugin('VoiceRecorder');
+      if (!VoiceRecorder) throw new Error('Registratore audio nativo non trovato. Esegui npx cap sync e ricompila l\'app.');
+      const can = await VoiceRecorder.canDeviceVoiceRecord();
+      if (!can || !can.value) throw new Error('Questo dispositivo non può registrare audio.');
+      const perm = await VoiceRecorder.requestAudioRecordingPermission();
+      if (!perm || !perm.value) throw new Error('Permesso microfono negato. Abilitalo nelle impostazioni dell\'app.');
+      await VoiceRecorder.startRecording();
+      isNativeAudioRecording = true;
+      startRecordingUI();
+      return;
+    }
+
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error('Microfono non supportato in questo browser.');
     }
@@ -170,10 +206,38 @@ async function startRecording() {
       stopRecordingUI();
     };
     mediaRecorder.start(1000);
+    isNativeAudioRecording = false;
     startRecordingUI();
   } catch (err) {
     setStatus('Errore microfono: ' + err.message, true);
   }
+}
+
+async function stopRecording() {
+  try {
+    if (isNative()) {
+      const VoiceRecorder = getNativePlugin('VoiceRecorder');
+      if (!VoiceRecorder) return;
+      const result = await VoiceRecorder.stopRecording();
+      const value = result && result.value ? result.value : {};
+      if (value.recordDataBase64) {
+        const mimeType = value.mimeType || 'audio/aac';
+        const blob = base64ToBlob(value.recordDataBase64, mimeType);
+        await showBlob(blob, 'audio');
+      } else if (value.path) {
+        const res = await fetch(value.path);
+        const blob = await res.blob();
+        await showBlob(blob, 'audio');
+      } else {
+        throw new Error('Nessun audio registrato.');
+      }
+    } else if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+  } catch (err) {
+    setStatus('Errore arresto registrazione: ' + err.message, true);
+  }
+  stopRecordingUI();
 }
 
 function startRecordingUI() {
@@ -204,10 +268,6 @@ function stopRecordingUI() {
   setStatus('Registrazione completata.');
 }
 
-function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-}
-
 function addNote() {
   currentBlob = null;
   currentType = 'note';
@@ -218,6 +278,17 @@ function addNote() {
   updatePreviewEmpty();
   setStatus('Scrivi la nota e premi Invia.');
   captionInput.focus();
+}
+
+function getFileExtension() {
+  if (currentType === 'image') return 'jpg';
+  if (!currentBlob || !currentBlob.type) return 'webm';
+  const type = currentBlob.type.toLowerCase();
+  if (type.includes('aac') || type.includes('mp4')) return 'm4a';
+  if (type.includes('webm')) return 'webm';
+  if (type.includes('ogg')) return 'ogg';
+  if (type.includes('wav')) return 'wav';
+  return 'webm';
 }
 
 async function sendMemory() {
@@ -239,7 +310,7 @@ async function sendMemory() {
   formData.append('source', 'mangiafuoco');
   formData.append('send_to_telegram', sendTelegram.checked ? 'true' : 'false');
   if (currentBlob) {
-    const ext = currentType === 'image' ? 'jpg' : 'webm';
+    const ext = getFileExtension();
     formData.append('file', currentBlob, `capture.${ext}`);
   }
 
@@ -279,22 +350,20 @@ async function loadMemories() {
 }
 
 let speechListener = null;
-let isSpeechNative = false;
 
 async function startSpeech() {
-  const native = isNative();
-  if (native) {
-    try {
-      const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
-      if (!SpeechRecognition) throw new Error('Plugin SpeechRecognition non trovato. Esegui npx cap sync.');
-      isSpeechNative = true;
+  try {
+    if (isNative()) {
+      const SpeechRecognition = getNativePlugin('SpeechRecognition');
+      if (!SpeechRecognition) throw new Error('Plugin riconoscimento vocale non trovato. Esegui npx cap sync.');
       const perm = await SpeechRecognition.requestPermissions();
-      if (perm && perm.permission && perm.permission !== 'granted') {
-        setStatus('Permesso microfono negato per il riconoscimento vocale.', true);
+      const status = perm && (perm.speechRecognition || perm.permission);
+      if (status && status !== 'granted') {
+        setStatus('Permesso microfono negato per la dettatura.', true);
         return;
       }
-      const { available } = await SpeechRecognition.available();
-      if (!available) {
+      const available = await SpeechRecognition.available();
+      if (!available || !available.available) {
         setStatus('Riconoscimento vocale non disponibile su questo dispositivo.', true);
         return;
       }
@@ -310,70 +379,71 @@ async function startSpeech() {
       captionInput.value = '';
 
       speechListener = await SpeechRecognition.addListener('partialResults', (event) => {
-        const text = event.matches && event.matches[0] ? event.matches[0] : '';
+        const text = event && event.matches && event.matches[0] ? event.matches[0] : '';
         if (text) captionInput.value = text;
       });
       await SpeechRecognition.start({ language: 'it-IT', partialResults: true, popup: false });
-    } catch (err) {
-      setStatus('Errore riconoscimento vocale: ' + err.message, true);
-      btnSpeech.textContent = 'Parla (testo)';
-      btnSpeech.onclick = startSpeech;
-    }
-  } else {
-    // Fallback Web Speech API for browser testing
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      setStatus('Riconoscimento vocale non supportato nel browser.', true);
-      return;
-    }
-    const recognition = new SR();
-    recognition.lang = 'it-IT';
-    recognition.interimResults = true;
-    recognition.continuous = false;
-    recognition.onresult = (e) => {
-      const transcript = Array.from(e.results)
-        .map(r => r[0].transcript)
-        .join('');
-      captionInput.value = transcript;
-    };
-    recognition.onerror = (e) => setStatus('Errore: ' + e.error, true);
-    recognition.onend = () => {
+    } else {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        setStatus('Riconoscimento vocale non supportato nel browser.', true);
+        return;
+      }
+      const recognition = new SR();
+      recognition.lang = 'it-IT';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      recognition.onresult = (e) => {
+        const transcript = Array.from(e.results)
+          .map(r => r[0].transcript)
+          .join('');
+        captionInput.value = transcript;
+      };
+      recognition.onerror = (e) => setStatus('Errore: ' + e.error, true);
+      recognition.onend = () => {
+        currentType = 'note';
+        btnSend.disabled = false;
+        updatePreviewEmpty();
+        setStatus('Trascrizione completata.');
+        btnSpeech.textContent = 'Dettatura vocale';
+        btnSpeech.onclick = startSpeech;
+      };
+      setStatus('Ascolto... parla ora');
       currentType = 'note';
-      btnSend.disabled = false;
-      updatePreviewEmpty();
-      setStatus('Trascrizione completata.');
-      btnSpeech.textContent = 'Parla (testo)';
-      btnSpeech.onclick = startSpeech;
-    };
-    setStatus('Ascolto... parla ora');
-    currentType = 'note';
-    photoPreview.style.display = 'none';
-    audioPreview.style.display = 'none';
-    videoPreview.style.display = 'none';
-    recognition.start();
-    btnSpeech.textContent = 'Ferma';
-    btnSpeech.onclick = () => { recognition.stop(); };
+      photoPreview.style.display = 'none';
+      audioPreview.style.display = 'none';
+      videoPreview.style.display = 'none';
+      recognition.start();
+      btnSpeech.textContent = 'Ferma';
+      btnSpeech.onclick = () => { recognition.stop(); };
+    }
+  } catch (err) {
+    setStatus('Errore riconoscimento vocale: ' + err.message, true);
+    btnSpeech.textContent = 'Dettatura vocale';
+    btnSpeech.onclick = startSpeech;
   }
 }
 
 async function stopSpeech() {
-  if (isSpeechNative) {
-    try {
-      const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
-      await SpeechRecognition.stop();
+  try {
+    if (isNative()) {
+      const SpeechRecognition = getNativePlugin('SpeechRecognition');
+      if (SpeechRecognition) {
+        await SpeechRecognition.stop();
+      }
       if (speechListener) {
         await speechListener.remove();
         speechListener = null;
       }
-      setStatus('Trascrizione completata.');
-      currentType = 'note';
-      btnSend.disabled = false;
-      updatePreviewEmpty();
-    } catch (err) {
-      setStatus('Errore stop: ' + err.message, true);
     }
+  } catch (err) {
+    setStatus('Errore stop: ' + err.message, true);
   }
-  btnSpeech.textContent = 'Parla (testo)';
+  setStatus('Trascrizione completata.');
+  currentType = 'note';
+  btnSend.disabled = false;
+  updatePreviewEmpty();
+  btnSpeech.textContent = 'Dettatura vocale';
   btnSpeech.onclick = startSpeech;
 }
 
@@ -448,16 +518,17 @@ async function executeCommand(text) {
 async function startVoiceCommand() {
   if (!isNative()) { setControlStatus('Comandi vocali solo nell\'app Android.', true); return; }
   try {
-    const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
-    if (!SpeechRecognition) throw new Error('Plugin SpeechRecognition non trovato.');
+    const SpeechRecognition = getNativePlugin('SpeechRecognition');
+    if (!SpeechRecognition) throw new Error('Plugin riconoscimento vocale non trovato.');
 
     const perm = await SpeechRecognition.requestPermissions();
-    if (perm && perm.permission && perm.permission !== 'granted') {
+    const status = perm && (perm.speechRecognition || perm.permission);
+    if (status && status !== 'granted') {
       setControlStatus('Permesso microfono negato.', true);
       return;
     }
-    const { available } = await SpeechRecognition.available();
-    if (!available) {
+    const available = await SpeechRecognition.available();
+    if (!available || !available.available) {
       setControlStatus('Riconoscimento vocale non disponibile.', true);
       return;
     }
@@ -467,14 +538,14 @@ async function startVoiceCommand() {
     btnVoiceCommand.classList.add('listening');
 
     voiceCommandListener = await SpeechRecognition.addListener('partialResults', (event) => {
-      const text = event.matches && event.matches[0] ? event.matches[0] : '';
+      const text = event && event.matches && event.matches[0] ? event.matches[0] : '';
       if (text) setControlStatus('Ascolto: ' + text);
     });
 
     await SpeechRecognition.start({ language: 'it-IT', partialResults: true, popup: false });
   } catch (err) {
     setControlStatus('Errore: ' + err.message, true);
-    btnVoiceCommand.textContent = 'Tieni premuto: comando vocale';
+    btnVoiceCommand.textContent = 'Comando vocale (tieni premuto)';
     btnVoiceCommand.classList.remove('listening');
   }
 }
@@ -482,27 +553,28 @@ async function startVoiceCommand() {
 async function stopVoiceCommand() {
   if (!isNative()) return;
   try {
-    const SpeechRecognition = window.Capacitor.Plugins.SpeechRecognition;
+    const SpeechRecognition = getNativePlugin('SpeechRecognition');
     if (voiceCommandListener) {
       await voiceCommandListener.remove();
       voiceCommandListener = null;
     }
-    const result = await SpeechRecognition.stop();
-    const text = result && result.matches && result.matches[0] ? result.matches[0] : '';
-    if (text) {
-      setControlStatus('Hai detto: ' + text);
-      await executeCommand(text);
-    } else {
-      setControlStatus('Nessun comando rilevato.');
+    if (SpeechRecognition) {
+      const result = await SpeechRecognition.stop();
+      const text = result && result.matches && result.matches[0] ? result.matches[0] : '';
+      if (text) {
+        setControlStatus('Hai detto: ' + text);
+        await executeCommand(text);
+      } else {
+        setControlStatus('Nessun comando rilevato.');
+      }
     }
   } catch (err) {
     setControlStatus('Errore stop: ' + err.message, true);
   }
-  btnVoiceCommand.textContent = 'Tieni premuto: comando vocale';
+  btnVoiceCommand.textContent = 'Comando vocale (tieni premuto)';
   btnVoiceCommand.classList.remove('listening');
 }
 
-// Browser fallback for voice command (hold button + Web Speech API)
 function startBrowserVoiceCommand() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { setControlStatus('Riconoscimento vocale non supportato.', true); return; }
@@ -514,7 +586,7 @@ function startBrowserVoiceCommand() {
   voiceCommandRecognizer.onend = async () => {
     const text = voiceCommandRecognizer && voiceCommandRecognizer.lastResult ? voiceCommandRecognizer.lastResult : '';
     if (text) await executeCommand(text);
-    btnVoiceCommand.textContent = 'Tieni premuto: comando vocale';
+    btnVoiceCommand.textContent = 'Comando vocale (tieni premuto)';
     btnVoiceCommand.classList.remove('listening');
   };
   voiceCommandRecognizer.onresult = (e) => {
@@ -536,20 +608,33 @@ function stopBrowserVoiceCommand() {
 }
 
 async function openWhatsapp() {
-  if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
-  try { await MangiafuocoControl.openApp({ packageName: 'com.whatsapp' }); setControlStatus('Apertura WhatsApp...'); } catch (err) { setControlStatus(err.message, true); }
+  if (isNative()) {
+    if (!MangiafuocoControl) { setControlStatus('Controllo telefono non disponibile.', true); return; }
+    try { await MangiafuocoControl.openApp({ packageName: 'com.whatsapp' }); setControlStatus('Apertura WhatsApp...'); } catch (err) { setControlStatus(err.message, true); }
+  } else {
+    window.open('https://wa.me/', '_blank');
+    setControlStatus('Apertura WhatsApp nel browser...');
+  }
 }
 
 async function openSettings() {
-  if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
-  try { await MangiafuocoControl.openSettings({}); setControlStatus('Apertura impostazioni...'); } catch (err) { setControlStatus(err.message, true); }
+  if (isNative()) {
+    if (!MangiafuocoControl) { setControlStatus('Controllo telefono non disponibile.', true); return; }
+    try { await MangiafuocoControl.openSettings({}); setControlStatus('Apertura impostazioni...'); } catch (err) { setControlStatus(err.message, true); }
+  } else {
+    setControlStatus('Impostazioni del telefono apribili solo dall\'app Android.', true);
+  }
 }
 
 async function uninstallPackage() {
-  if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
-  const pkg = uninstallInput && uninstallInput.value.trim();
-  if (!pkg) { setControlStatus('Inserisci un package name.', true); return; }
-  try { await MangiafuocoControl.uninstallApp({ packageName: pkg }); setControlStatus('Apertura dialogo disinstallazione...'); } catch (err) { setControlStatus(err.message, true); }
+  if (isNative()) {
+    if (!MangiafuocoControl) { setControlStatus('Controllo telefono non disponibile.', true); return; }
+    const pkg = uninstallInput && uninstallInput.value.trim();
+    if (!pkg) { setControlStatus('Inserisci un package name.', true); return; }
+    try { await MangiafuocoControl.uninstallApp({ packageName: pkg }); setControlStatus('Apertura dialogo disinstallazione...'); } catch (err) { setControlStatus(err.message, true); }
+  } else {
+    setControlStatus('Disinstallazione disponibile solo dall\'app Android.', true);
+  }
 }
 
 btnPhoto.addEventListener('click', takePhoto);
