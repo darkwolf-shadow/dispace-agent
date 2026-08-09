@@ -9,22 +9,23 @@ body {
 header {
   background: #d94f0e;
   color: white;
-  padding: 1rem;
+  padding: 2rem 1rem 1.5rem;
   text-align: center;
 }
 
 header .avatar {
-  width: 80px;
-  height: 80px;
+  width: 180px;
+  height: 180px;
   border-radius: 50%;
-  border: 3px solid white;
-  margin-bottom: 0.5rem;
+  border: 4px solid white;
+  margin-bottom: 1rem;
   object-fit: cover;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
 }
 
 header h1 {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: 2.2rem;
 }
 
 header p {
