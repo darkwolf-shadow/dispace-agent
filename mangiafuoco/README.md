@@ -61,8 +61,9 @@ La fotocamera in browser potrebbe non funzionare su tutti i dispositivi; per il 
 - Invia i dati al backend `/mangiafuoco/memories`.
 - Invia anche al bot Telegram `@mangiafuocobot`.
 - Mostra le memorie recenti.
-- Hotword "Mangiafuoco" a schermo spento (app Android).
+- Comandi vocali su richiesta: tieni premuto il pulsante, parla, rilascia.
 - Apri altre app, impostazioni e dialogo disinstallazione (app Android).
+- Nessun ascolto in background: il microfono si accende solo quando premi il pulsante.
 
 ## Backend
 
@@ -72,7 +73,7 @@ L'app si appoggia al backend DiSpace su Railway:
 ## Prossimi passi
 
 - [x] Integrare invio diretto al bot Telegram.
-- [x] Hotword "Mangiafuoco" e controllo telefono.
+- [x] Comandi vocali su richiesta e controllo telefono.
 - [ ] Ricerca semantica sulle memorie.
 - [ ] Elaborazione audio locale per ridurre i dati inviati.
 - [ ] Possibilità di ospitare un piccolo agente in locale sul telefono.

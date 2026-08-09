@@ -166,6 +166,11 @@ button.secondary {
   background: #6b5b4f;
 }
 
+button.listening {
+  background: #c62828;
+  animation: pulse 1s infinite;
+}
+
 .status {
   font-size: 0.9rem;
   color: #2e7d32;

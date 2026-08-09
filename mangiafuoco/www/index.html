@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#d94f0e">
   <title>Mangiafuoco</title>
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <header>
@@ -64,10 +64,9 @@
 
     <section class="control-card">
       <h2>Controllo telefono</h2>
-      <p>Funzioni attive solo nell'app Android nativa.</p>
+      <p>Funzioni attive solo nell'app Android nativa. Comando vocale: tieni premuto, parla, rilascia.</p>
       <div class="actions">
-        <button id="btn-hotword">Ascolta "Mangiafuoco"</button>
-        <button id="btn-stop-hotword" class="secondary" style="display:none;">Ferma ascolto</button>
+        <button id="btn-voice-command" class="secondary">Tieni premuto: comando vocale</button>
       </div>
       <div class="actions">
         <button id="btn-open-whatsapp">Apri WhatsApp</button>
@@ -88,6 +87,6 @@
   </main>
 
   <script src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
