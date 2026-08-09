@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#d94f0e">
   <title>Mangiafuoco</title>
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <header>
@@ -62,6 +62,24 @@
       <p id="status" class="status"></p>
     </section>
 
+    <section class="control-card">
+      <h2>Controllo telefono</h2>
+      <p>Funzioni attive solo nell'app Android nativa.</p>
+      <div class="actions">
+        <button id="btn-hotword">Ascolta "Mangiafuoco"</button>
+        <button id="btn-stop-hotword" class="secondary" style="display:none;">Ferma ascolto</button>
+      </div>
+      <div class="actions">
+        <button id="btn-open-whatsapp">Apri WhatsApp</button>
+        <button id="btn-open-settings">Impostazioni</button>
+      </div>
+      <label>Disinstalla un'app (package name)
+        <input type="text" id="uninstall-package" placeholder="es. com.facebook.katana">
+      </label>
+      <button id="btn-uninstall">Disinstalla</button>
+      <p id="control-status" class="status"></p>
+    </section>
+
     <section class="memories-card">
       <h2>Memorie recenti</h2>
       <ul id="memories-list"></ul>
@@ -70,6 +88,6 @@
   </main>
 
   <script src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

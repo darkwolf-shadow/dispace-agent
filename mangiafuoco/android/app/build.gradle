@@ -40,6 +40,33 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    implementation 'com.alphacephei:vosk-android:0.3.75'
+    implementation 'net.java.dev.jna:jna:5.18.1@aar'
+}
+
+def voskModelDir = file("${projectDir}/src/main/assets/vosk-model-it")
+def voskModelZip = file("${buildDir}/vosk-model-small-it-0.22.zip")
+
+task downloadVoskModel {
+    doLast {
+        if (!voskModelDir.exists()) {
+            if (!voskModelZip.exists()) {
+                println "Downloading Vosk Italian model..."
+                ant.get(src: 'https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip',
+                        dest: voskModelZip,
+                        skipexisting: true)
+            }
+            println "Extracting Vosk model..."
+            ant.unzip(src: voskModelZip, dest: file("${projectDir}/src/main/assets"), overwrite: true)
+            file("${projectDir}/src/main/assets/vosk-model-small-it-0.22").renameTo(voskModelDir)
+        }
+    }
+}
+
+tasks.whenTaskAdded { task ->
+    if (task.name == 'preBuild') {
+        task.dependsOn downloadVoskModel
+    }
 }
 
 apply from: 'capacitor.build.gradle'

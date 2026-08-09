@@ -1,0 +1,5 @@
+public/
+capacitor.config.json
+vosk-model-it/
+vosk-model-small-it-0.22/
+*.zip

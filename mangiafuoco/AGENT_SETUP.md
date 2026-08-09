@@ -117,5 +117,14 @@ Poi builda e reinstalla l'APK.
 
 ## Note
 
+- **Modello Vosk**: al primo build Gradle scarica automaticamente il modello italiano (~50 MB zip, ~90 MB estratto) in `android/app/src/main/assets/vosk-model-it`. La connessione internet deve essere attiva.
+- Permessi richiesti dall'app:
+  - Microfono (per ascolto e registrazione)
+  - Fotocamera
+  - Posizione
+  - Esecuzione in primo piano / microfono (per la hotword anche con schermo spento)
+  - Installa da fonti sconosciute (solo se installi l'APK manualmente)
+- Dopo l'installazione, apri l'app e concedi i permessi. Poi premi **"Ascolta 'Mangiafuoco'"** per attivare la hotword.
+- Per disinstallare app o aprire impostazioni usa i pulsanti nella sezione **Controllo telefono**.
 - Se Gradle chiede di accettare licenze, esegui `sdkmanager --licenses` dalla cartella `sdk`.
 - Se Android Studio segnala errori su Java, imposta JDK 17 in **File → Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK**.

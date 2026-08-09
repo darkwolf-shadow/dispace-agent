@@ -25,6 +25,8 @@ const memoriesList = document.getElementById('memories-list');
 let currentBlob = null;
 let currentType = null;
 let mediaRecorder = null;
+
+const MangiafuocoControl = window.Capacitor && Capacitor.registerPlugin ? Capacitor.registerPlugin('MangiafuocoControl') : null;
 let audioChunks = [];
 let recordingStartTime = null;
 let recordingInterval = null;
@@ -343,6 +345,72 @@ async function stopSpeech() {
   btnSpeech.onclick = startSpeech;
 }
 
+const btnHotword = document.getElementById('btn-hotword');
+const btnStopHotword = document.getElementById('btn-stop-hotword');
+const btnOpenWhatsapp = document.getElementById('btn-open-whatsapp');
+const btnOpenSettings = document.getElementById('btn-open-settings');
+const btnUninstall = document.getElementById('btn-uninstall');
+const uninstallInput = document.getElementById('uninstall-package');
+const controlStatus = document.getElementById('control-status');
+
+function setControlStatus(msg, isError = false) {
+  if (controlStatus) {
+    controlStatus.textContent = msg;
+    controlStatus.className = 'status ' + (isError ? 'error' : '');
+  }
+}
+
+async function startHotword() {
+  if (!MangiafuocoControl) {
+    setControlStatus('Controllo telefono solo nell\\'app Android.', true);
+    return;
+  }
+  try {
+    await MangiafuocoControl.startHotword({ keyword: 'mangiafuoco' });
+    setControlStatus('In ascolto per "Mangiafuoco" in background.');
+    btnHotword.style.display = 'none';
+    btnStopHotword.style.display = 'inline-block';
+  } catch (err) {
+    setControlStatus('Errore: ' + err.message, true);
+  }
+}
+
+async function stopHotword() {
+  if (!MangiafuocoControl) return;
+  try {
+    await MangiafuocoControl.stopHotword();
+    setControlStatus('Ascolto fermato.');
+    btnHotword.style.display = 'inline-block';
+    btnStopHotword.style.display = 'none';
+  } catch (err) {
+    setControlStatus('Errore: ' + err.message, true);
+  }
+}
+
+async function openWhatsapp() {
+  if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
+  try { await MangiafuocoControl.openApp({ packageName: 'com.whatsapp' }); setControlStatus('Apertura WhatsApp...'); } catch (err) { setControlStatus(err.message, true); }
+}
+
+async function openSettings() {
+  if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
+  try { await MangiafuocoControl.openSettings({}); setControlStatus('Apertura impostazioni...'); } catch (err) { setControlStatus(err.message, true); }
+}
+
+async function uninstallPackage() {
+  if (!MangiafuocoControl) { setControlStatus('Solo app Android.', true); return; }
+  const pkg = uninstallInput && uninstallInput.value.trim();
+  if (!pkg) { setControlStatus('Inserisci un package name.', true); return; }
+  try { await MangiafuocoControl.uninstallApp({ packageName: pkg }); setControlStatus('Apertura dialogo disinstallazione...'); } catch (err) { setControlStatus(err.message, true); }
+}
+
+if (MangiafuocoControl && MangiafuocoControl.addListener) {
+  MangiafuocoControl.addListener('hotword', (event) => {
+    setControlStatus('Hotword rilevata: ' + event.keyword);
+    startSpeech();
+  });
+}
+
 btnPhoto.addEventListener('click', takePhoto);
 btnAudio.addEventListener('click', startRecording);
 btnSpeech.addEventListener('click', startSpeech);
@@ -351,5 +419,10 @@ btnSend.addEventListener('click', sendMemory);
 btnCancel.addEventListener('click', resetPreview);
 btnRefresh.addEventListener('click', loadMemories);
 if (btnClearPreview) btnClearPreview.addEventListener('click', resetPreview);
+if (btnHotword) btnHotword.addEventListener('click', startHotword);
+if (btnStopHotword) btnStopHotword.addEventListener('click', stopHotword);
+if (btnOpenWhatsapp) btnOpenWhatsapp.addEventListener('click', openWhatsapp);
+if (btnOpenSettings) btnOpenSettings.addEventListener('click', openSettings);
+if (btnUninstall) btnUninstall.addEventListener('click', uninstallPackage);
 
 loadMemories();
