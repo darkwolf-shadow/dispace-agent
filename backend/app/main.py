@@ -11,7 +11,7 @@ import pytesseract
 import requests
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
@@ -1911,6 +1911,69 @@ def _extract_text_from_image(path: str) -> str:
     return ""
 
 
+def _describe_image_with_vision(path: str) -> str:
+    if not openai_client:
+        return ""
+    try:
+        with Image.open(path) as img:
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            img.thumbnail((1600, 1600))
+            buffer = io.BytesIO()
+            img.save(buffer, format="JPEG", quality=85)
+            b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+        prompt = (
+            "Descrivi questa immagine in italiano. "
+            "Indica persone, luoghi, oggetti, testo visibile, azioni e contesto. "
+            "Sii conciso: 2-4 frasi chiare."
+        )
+        resp = openai_client.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Sei un assistente personale che descrive le foto in italiano."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                    ],
+                },
+            ],
+            max_tokens=400,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as exc:
+        print("Vision memory error:", exc)
+    return ""
+
+
+def _summarize_memory_text(caption: Optional[str], extracted_text: str, vision_description: str) -> Optional[str]:
+    if not openai_client:
+        return None
+    text_for_summary = " ".join([caption or "", extracted_text, vision_description]).strip()
+    if not text_for_summary:
+        return None
+    try:
+        prompt = (
+            "Sei un assistente personale. Riassumi in 2-3 frasi in italiano il seguente contenuto, "
+            "evidenziando persone, luoghi, argomenti e azioni da fare.\n\n"
+            f"{text_for_summary[:2000]}"
+        )
+        resp = openai_client.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Sei un assistente personale che crea memorie concise."},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=300,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as exc:
+        print("Memory summary error:", exc)
+    return None
+
+
 @app.post("/mangiafuoco/memories", response_model=MemoryOut)
 def create_memory(
     type: str = Form("note"),
@@ -1928,30 +1991,14 @@ def create_memory(
         file_path = save_upload(file)
 
     extracted_text = ""
-    summary = None
+    vision_description = ""
     if file_path and type == "image":
         extracted_text = _extract_text_from_image(file_path)
+        # If OCR is empty or just a few words, ask a vision model to describe the image.
+        if openai_client and (not extracted_text or len(extracted_text.split()) < 5):
+            vision_description = _describe_image_with_vision(file_path)
 
-    # Generate summary if we have caption or extracted text
-    text_for_summary = " ".join([caption or "", extracted_text]).strip()
-    if text_for_summary and openai_client:
-        try:
-            prompt = (
-                "Sei un assistente personale. Riassumi in 2-3 frasi in italiano il seguente contenuto, "
-                "evidenziando persone, luoghi, argomenti e azioni da fare.\n\n"
-                f"{text_for_summary[:2000]}"
-            )
-            resp = openai_client.chat.completions.create(
-                model="openai/gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "Sei un assistente personale che crea memorie concise."},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=300,
-            )
-            summary = resp.choices[0].message.content.strip()
-        except Exception as exc:
-            print("Memory summary error:", exc)
+    summary = _summarize_memory_text(caption, extracted_text, vision_description)
 
     memory = Memory(
         type=type,
@@ -2027,6 +2074,34 @@ def search_memories(q: str, db: Session = Depends(get_db)):
         .all()
     )
     return results
+
+
+@app.get("/mangiafuoco/memories/{memory_id}/file")
+def get_memory_file(memory_id: int, db: Session = Depends(get_db)):
+    memory = db.query(Memory).filter(Memory.id == memory_id).first()
+    if not memory or not memory.media_path or not os.path.exists(memory.media_path):
+        raise HTTPException(status_code=404, detail="File non trovato")
+    return FileResponse(memory.media_path)
+
+
+@app.post("/mangiafuoco/memories/{memory_id}/reprocess", response_model=MemoryOut)
+def reprocess_memory(memory_id: int, db: Session = Depends(get_db)):
+    memory = db.query(Memory).filter(Memory.id == memory_id).first()
+    if not memory:
+        raise HTTPException(status_code=404, detail="Memoria non trovata")
+
+    if memory.type == "image" and memory.media_path and os.path.exists(memory.media_path):
+        memory.extracted_text = _extract_text_from_image(memory.media_path) or None
+        vision_description = ""
+        if openai_client and (not memory.extracted_text or len(memory.extracted_text.split()) < 5):
+            vision_description = _describe_image_with_vision(memory.media_path)
+        memory.summary = _summarize_memory_text(memory.caption, memory.extracted_text or "", vision_description)
+    elif memory.type == "note" and memory.caption:
+        memory.summary = _summarize_memory_text(memory.caption, memory.extracted_text or "", "")
+
+    db.commit()
+    db.refresh(memory)
+    return memory
 
 
 # -------------------- Telegram Bot Webhook --------------------
